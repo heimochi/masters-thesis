@@ -1,0 +1,33 @@
+{
+    "id": "ACBF4A03",
+    "path": "~/Desktop/GitHub/masters_thesis/Data/ocd/scripts/plot_b_external.qmd",
+    "project_path": "ocd/scripts/plot_b_external.qmd",
+    "type": "quarto_markdown",
+    "hash": "2584710423",
+    "contents": "",
+    "dirty": false,
+    "created": 1747641163622.0,
+    "source_on_save": false,
+    "relative_order": 8,
+    "properties": {
+        "rmdVisualMode": "false",
+        "rmdVisualWrapConfigured": "true",
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "docOutlineVisible": "1",
+        "rmdVisualCollapsedChunks": "",
+        "cursorPosition": "287,49",
+        "scrollLine": "282",
+        "rmdVisualModeLocation": "62:0",
+        "last_setup_crc32": "3e61c8d186f72e20"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1746361738,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1746361738,
+    "read_only": false,
+    "read_only_alternatives": []
+}

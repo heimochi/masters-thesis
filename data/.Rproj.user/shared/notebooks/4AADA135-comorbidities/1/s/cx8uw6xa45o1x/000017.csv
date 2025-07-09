@@ -1,0 +1,18 @@
+"0","all_ksads_diagnosis <- read.csv(""/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/mental-health/mh_p_ksads_ss.csv"")%>%
+  mutate(
+    across(
+      # Exclude specific columns from conversion
+      -c(src_subject_id, eventname, ksads_import_id_p, ksads_timestamp_p, ksads2_import_id_p,  ksads2_timestamp_p),
+      ~ if_else(as.numeric(.) %in% c(888, 555), NA_real_, as.numeric(.))
+    ) %>%
+  filter(eventname == ""2_year_follow_up_y_arm_1"")   #Keep the relevant time points
+) 
+"
+"1","[1m[33mError[39m in `mutate()`:[22m
+[38;5;246m[36mℹ[38;5;246m In argument: ``%>%`(...)`.[39m
+[1mCaused by error:[22m
+[38;5;246m[33m![38;5;246m ``%>%`(...)` must be size 48690 or 1, not 10756.[39m
+Backtrace:
+[90m 1. [39m... %>% ...
+[90m 9. [39m[1mdplyr[22m:::dplyr_internal_error(...)
+"

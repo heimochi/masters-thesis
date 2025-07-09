@@ -1,0 +1,14 @@
+"0","# --- Load MRI Data ---"
+"0","mri <- read_csv(""/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/mri.csv"") %>%"
+"0","  select(-smri_vol_scs_lesionlh, -smri_vol_scs_lesionrh, -smri_vol_scs_intracranialv)  # Drop high-NA/collinear vars"
+"2","[1mRows: [22m[34m8092[39m [1mColumns: [22m[34m198[39m"
+"2","[36m──[39m [1mColumn specification[22m [36m──────────────────────────────────────────────────────────────────────[39m
+[1mDelimiter:[22m "",""
+[31mchr[39m   (1): src_subject_id
+[32mdbl[39m (195): mrisdp_454, mrisdp_455, mrisdp_456, mrisdp_457, mrisdp_458, mrisdp_459, mrisdp_...
+[33mlgl[39m   (2): smri_vol_scs_lesionlh, smri_vol_scs_lesionrh"
+"2","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message."
+"0","# Merge subject IDs and MRI"
+"0","full_dat <- inner_join(subids, mri, by = ""src_subject_id"")"

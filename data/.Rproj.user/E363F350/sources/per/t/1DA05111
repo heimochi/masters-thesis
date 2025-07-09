@@ -1,0 +1,33 @@
+{
+    "id": "1DA05111",
+    "path": "~/Desktop/GitHub/masters_thesis/Data/ocd/scripts/ex_bpm.qmd",
+    "project_path": "ocd/scripts/ex_bpm.qmd",
+    "type": "quarto_markdown",
+    "hash": "3249503199",
+    "contents": "",
+    "dirty": false,
+    "created": 1746396291571.0,
+    "source_on_save": false,
+    "relative_order": 7,
+    "properties": {
+        "rmdVisualMode": "false",
+        "rmdVisualWrapConfigured": "true",
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "docOutlineVisible": "1",
+        "rmdVisualCollapsedChunks": "",
+        "cursorPosition": "150,0",
+        "scrollLine": "0",
+        "rmdVisualModeLocation": "2:0",
+        "last_setup_crc32": ""
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1746355190,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1746355190,
+    "read_only": false,
+    "read_only_alternatives": []
+}

@@ -1,0 +1,29 @@
+{
+    "id": "2DAFCCFD",
+    "path": "~/Desktop/GitHub/masters_thesis/Data/ocd/scripts/predict_bpm.qmd",
+    "project_path": "ocd/scripts/predict_bpm.qmd",
+    "type": "quarto_markdown",
+    "hash": "3713073583",
+    "contents": "",
+    "dirty": false,
+    "created": 1746392981669.0,
+    "source_on_save": false,
+    "relative_order": 4,
+    "properties": {
+        "rmdVisualMode": "false",
+        "source_window_id": "",
+        "Source": "Source",
+        "docOutlineVisible": "1",
+        "cursorPosition": "414,0",
+        "scrollLine": "0",
+        "last_setup_crc32": ""
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1746295488,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1746295488,
+    "read_only": false,
+    "read_only_alternatives": []
+}

@@ -1,0 +1,397 @@
+---
+title: "Analysis Grid Search"
+author: "MochiBear.Hei"
+date: "03.20.2025"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Data manipulation
+library(dplyr)
+library(tidyr)
+
+#models
+library(caret)
+library(xgboost)
+
+# Plotting
+library(ggplot2)
+
+# Utilities
+library(knitr)
+```
+
+
+# load
+
+```{r}
+subids <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/src_subject_id.csv")
+
+mri <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/mri.csv") %>%
+  select (-smri_vol_scs_lesionlh, -smri_vol_scs_lesionrh) #removed these columns because they have 4897 NA each
+
+#merge
+full_dat <- mri[mri$src_subject_id %in% subids$src_subject_id, ]
+```
+
+```{r}
+bpm <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_y_bpm.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id, bpm_y_scr_internal_t, bpm_y_scr_external_t, bpm_y_scr_totalprob_t) %>%
+  distinct(src_subject_id, .keep_all = TRUE) %>% #remove duplicates
+  mutate(across(c(bpm_y_scr_internal_t, bpm_y_scr_external_t, bpm_y_scr_totalprob_t), ~ as.numeric(scale(.)))) #standardize
+
+# merge
+full_dat <- inner_join(full_dat, bpm, by = "src_subject_id")
+```
+
+
+CBCL Internalizing, Externalizing, and Total Problem scales have a full T-score range with a mean = 50 and SD = 10
+
+```{r}
+cbcl <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/mental-health/mh_p_cbcl.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(
+    src_subject_id,cbcl_scr_syn_internal_t, cbcl_scr_syn_external_t, cbcl_scr_syn_totprob_t
+  ) %>%
+  distinct(src_subject_id, .keep_all = TRUE) %>% # remove duplicates
+  mutate(across(c(cbcl_scr_syn_internal_t, cbcl_scr_syn_external_t, cbcl_scr_syn_totprob_t), ~ as.numeric(scale(.)))) # standardize scores
+
+# merge
+full_dat <- inner_join(full_dat, cbcl, by = "src_subject_id")
+```
+
+
+
+
+-------- demo
+demo <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis//Data/core/abcd-general/abcd_p_demo.csv") %>%
+  filter(eventname == "baseline_year_1_arm_1") %>%
+  select(src_subject_id, demo_sex_v2, race_ethnicity, demo_brthdat_v2)
+
+# merge
+full_dat <- inner_join(full_dat, demo, by = "src_subject_id")
+
+--------
+
+
+-------- extract ids for demographics 
+
+full_dat <- full_dat %>%
+  select(
+    src_subject_id,
+  )
+write.csv(full_dat, "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/full.csv", row.names = FALSE)
+
+--------
+
+missingness
+
+```{r}
+na_counts <- colSums(is.na(full_dat))
+na_counts[na_counts > 0]  # print only columns with NA values
+
+
+# mean imputation: 
+full_dat <- full_dat %>%
+  mutate(across(c(mrisdp_508, mrisdp_527,    mrisdp_567, mrisdp_582, mrisdp_601, mrisdp_602, mrisdp_603, mrisdp_604,
+                  bpm_y_scr_internal_t, bpm_y_scr_external_t, bpm_y_scr_totalprob_t),
+                ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
+
+```
+
+
+
+# Split data: test and training
+
+```{r}
+set.seed(123)  
+
+# Split the data into training and test sets (70/30)
+n <- nrow(full_dat)
+train_indices <- sample(1:n, size = round(0.7 * n))
+
+train_data <- full_dat[train_indices, ]  #4897 of 205
+test_data <- full_dat[-train_indices, ] #2099 of 205
+```
+
+
+
+## xg(cbcl_internal)
+
+```{r}
+set.seed(1)
+
+# Define target and predictors
+target <- "cbcl_scr_syn_internal_t"
+predictors <- colnames(full_dat)[!colnames(full_dat) %in% c("src_subject_id", "bpm_y_scr_internal_t", "bpm_y_scr_external_t", "bpm_y_scr_totalprob_t", "cbcl_scr_syn_external_t", "cbcl_scr_syn_totprob_t", target)]
+
+# Remove the target variable from the feature set
+X_train <- train_data[, predictors, drop = FALSE]
+
+# Target variable needs to be a vector
+cbcl_scr_syn_internal_t_vector <- as.vector(train_data[[target]])
+
+# Convert the data to a DMatrix object for XGBoost
+dtrain <- xgb.DMatrix(data = as.matrix(X_train), label = cbcl_scr_syn_internal_t_vector)
+
+# Prepare test data
+X_test <- test_data[, predictors, drop = FALSE]
+y_test <- as.vector(test_data[[target]])
+
+# Convert the test data to a DMatrix object
+dtest <- xgb.DMatrix(data = as.matrix(X_test), label = y_test)
+
+# Define the parameter grid for hyperparameter tuning
+param_grid <- expand.grid(
+  nrounds = c(50, 100),       # Number of boosting rounds
+  max_depth = c(2, 7),        # Maximum depth of a tree
+  min_child_weight = c(1, 2), # Minimum sum of instance weight (hessian) needed in a child
+  eta = c(0.05, 0.1),         # Learning rate
+  gamma = c(0.1, 1),          # Minimum loss reduction
+  subsample = c(0.6, 0.8),    # Subsample ratio of training instances
+  colsample_bytree = c(0.6, 0.8) # Subsample ratio of columns when constructing each tree
+)
+
+# Display the structure to confirm multiple combinations
+str(param_grid)
+
+# Set up cross-validation controls for regression
+train_control <- trainControl(
+  method = "cv",              # Use cross-validation
+  number = 5,                 # 5-fold cross-validation
+  verboseIter = TRUE          # Print training progress
+)
+
+# Train the model
+model_cbcl_i <- train(
+  x = X_train,                     # Training features
+  y = cbcl_scr_syn_internal_t_vector, # Target variable
+  method = "xgbTree",              # Use XGBoost for regression
+  tuneGrid = param_grid,           # Expanded parameter grid for tuning
+  trControl = train_control,       # Train control setup
+  metric = "RMSE"                  # Evaluation metric for regression
+)
+
+# Print the best tuning parameters found
+print(model_cbcl_i$bestTune)
+
+```
+
+```{r}
+results_df <- model_cbcl_i$results
+print(head(results_df))
+
+# CV Error vs. 'nrounds' with color coding for 'max_depth' and 'eta'
+ggplot(results_df, aes(x = nrounds, y = RMSE, color = as.factor(max_depth))) +
+  geom_point() +
+  geom_line(aes(linetype = as.factor(eta))) +
+  labs(
+    title = "CV Error vs. Number of Rounds for Different Max Depth and Eta",
+    x = "Number of Rounds (nrounds)",
+    y = "CV Error (RMSE)",
+    color = "Max Depth"
+  ) +
+  scale_linetype_discrete(name = "Eta") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+# = x number of boosting rounds used in the model, y = RMSE (lower is better), each color represents a different max_depth value which controls the complexity of the trees, eta indicates the learning rate
+# the plot helps visualize how increasing the number of boosting rounds affects the models error rate across different tree depths and learning rates 
+
+
+# CV Error vs. max_depth
+ggplot(results_df, aes(x = max_depth, y = RMSE, color = as.factor(eta), linetype = as.factor(eta), group = interaction(nrounds, eta))) +
+  geom_point() +
+  geom_line() +
+  labs(
+    title = "CV Error vs. Max Depth",
+    x = "Max Depth",
+    y = "CV Error (RMSE)",
+    color = "Eta",
+    linetype = "Eta"
+  ) +
+  theme_minimal()
+```
+
+Evaluate using carets post resample function evaluation
+
+```{r}
+# Make predictions with the trained model on the test data
+preds <- predict(model_cbcl_i, newdata = X_test)
+
+# Evaluate using caret's postResample function
+evaluation <- postResample(preds, y_test)
+
+# Print evaluation results
+print(evaluation)
+```
+
+```{r}
+# final fitted model
+final_model <- model_cbcl_i$finalModel
+
+# Extract feature importance from the model
+importance_matrix <- xgb.importance(model = final_model)
+
+print(importance_matrix)
+
+# Plot the feature importance
+xgb.plot.importance(importance_matrix, top_n = 10)
+```
+
+## xg(bpm_internal)
+
+```{r}
+set.seed(1)
+
+target <- "bpm_y_scr_internal_t"  
+predictors <- colnames(full_dat)[!colnames(full_dat) %in% c("src_subject_id","cbcl_scr_syn_internal_t", "bpm_y_scr_external_t", "bpm_y_scr_totalprob_t", "cbcl_scr_syn_external_t", "cbcl_scr_syn_totprob_t", target)]  
+
+set.seed(1)
+
+X_train <- train_data[, predictors, drop = FALSE]
+
+bpm_y_scr_internal_t_vector <- as.vector(train_data[[target]])
+
+#make matrix
+dtrain <- xgb.DMatrix(data = as.matrix(X_train), label = bpm_y_scr_internal_t_vector)
+
+# Prepare test data
+X_test <- test_data[, predictors, drop = FALSE]
+y_test <- as.vector(test_data[[target]])
+
+# Convert the test data to a DMatrix object
+dtest <- xgb.DMatrix(data = as.matrix(X_test), label = y_test)
+
+
+param_grid <- expand.grid(
+  nrounds = c(50, 100),       
+  max_depth = c(2, 7),        
+  min_child_weight = c(1, 2), 
+  eta = c(0.05, 0.1),         
+  gamma = c(0.1, 1),          
+  subsample = c(0.6, 0.8),    
+  colsample_bytree = c(0.6, 0.8) 
+)
+
+#confirm
+str(param_grid)
+
+# CV controls
+train_control <- trainControl(
+  method = "cv",              
+  number = 5,                 
+  verboseIter = TRUE          
+)
+
+# Train the model
+model_bpm_i <- train(
+  x = X_train,                     
+  y = bpm_y_scr_internal_t_vector, 
+  method = "xgbTree",              
+  tuneGrid = param_grid,           
+  trControl = train_control,       
+  metric = "RMSE"                  
+)
+
+# print the best 
+print(model_bpm_i$bestTune)
+
+```
+
+```{r}
+results_df <- model_bpm_i$results
+print(head(results_df))
+
+# CV Error vs. 'nrounds' with color coding for 'max_depth' and 'eta'
+ggplot(results_df, aes(x = nrounds, y = RMSE, color = as.factor(max_depth))) +
+  geom_point() +
+  geom_line(aes(linetype = as.factor(eta))) +
+  labs(
+    title = "CV Error vs. Number of Rounds for Different Max Depth and Eta",
+    x = "Number of Rounds (nrounds)",
+    y = "CV Error (RMSE)",
+    color = "Max Depth"
+  ) +
+  scale_linetype_discrete(name = "Eta") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# CV Error vs. max_depth
+ggplot(results_df, aes(x = max_depth, y = RMSE, color = as.factor(eta), linetype = as.factor(eta), group = interaction(nrounds, eta))) +
+  geom_point() +
+  geom_line() +
+  labs(
+    title = "CV Error vs. Max Depth",
+    x = "Max Depth",
+    y = "CV Error (RMSE)",
+    color = "Eta",
+    linetype = "Eta"
+  ) +
+  theme_minimal()
+```
+
+Evaluation
+
+```{r}
+preds <- predict(model_bpm_i, newdata = X_test)
+
+evaluation <- postResample(preds, y_test)
+
+print(evaluation)
+```
+
+```{r}
+final_model <- model_bpm_i$finalModel
+
+importance_matrix <- xgb.importance(model = final_model)
+
+print(importance_matrix)
+
+# Plot the feature importance
+xgb.plot.importance(importance_matrix, top_n = 10)
+```

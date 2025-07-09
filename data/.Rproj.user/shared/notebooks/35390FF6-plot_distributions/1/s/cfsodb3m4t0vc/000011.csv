@@ -1,0 +1,10 @@
+"0","# Create the plot"
+"0","ggplot(results, aes(x = Actual, y = Predicted)) +"
+"0","  geom_point(color = 'blue') +                     # Points for actual vs predicted"
+"0","  geom_abline(intercept = 0, slope = 1, color = 'red', linetype = ""dashed"") +  # 45-degree reference line"
+"0","  labs(title = ""Predicted vs Actual Values"",       # Title of the plot"
+"0","       x = ""Actual Values"",                         # X-axis label"
+"0","       y = ""Predicted Values"") +                    # Y-axis label"
+"0","  theme_minimal()                                   # Minimal theme for better aesthetics"
+"2","Error: object 'results' not found
+"

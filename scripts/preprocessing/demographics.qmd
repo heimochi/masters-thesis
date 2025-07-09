@@ -1,0 +1,347 @@
+---
+title: "ABCD Demographics"
+author: "MochiBear.Hei"
+date: "12.19.2024"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Data manipulation
+library(readr)
+library(dplyr)
+library(stringr)
+
+# Plotting
+library(ggplot2)
+library(naniar)
+library(tidyr)
+library(gridExtra)
+
+# Utilities
+library(knitr)
+
+```
+
+Healthy vs OCD
+```{r}
+full_dat <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/subids.csv") %>%
+  select(src_subject_id, ksads_11_917_p)
+
+
+
+subids <- full_dat %>%
+  filter(ksads_11_917_p == "1")  #CHANGE GROUP HERE 
+```
+
+# Demographics 
+```{r}
+demo <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis//Data/core/abcd-general/abcd_p_demo.csv") %>%
+  filter(eventname == "baseline_year_1_arm_1") %>%
+  select(src_subject_id, demo_sex_v2, demo_gender_id_v2, race_ethnicity, demo_brthdat_v2)
+
+
+#merge based on subid list
+demo <- demo[demo$src_subject_id %in% subids$src_subject_id, ]
+
+```
+
+
+```{r}
+demo <- demo %>%
+  mutate(demo_sex_v2 = case_when(
+    demo_sex_v2 == 1 ~ "Male",
+    demo_sex_v2 == 2 ~ "Female",
+    demo_sex_v2 == 3 ~ "Intersex-Male",
+    demo_sex_v2 == 4 ~ "Intersex-Female",
+    demo_sex_v2 == 999 ~ "Don't know",
+    demo_sex_v2 == 777 ~ "Refuse to answer",
+    TRUE ~ as.character(demo_sex_v2)
+  ))
+
+demo <- demo %>%
+  mutate(demo_gender_id_v2 = case_when(
+    demo_gender_id_v2 == 1 ~ "Male",
+    demo_gender_id_v2 == 2 ~ "Female",
+    demo_gender_id_v2 == 3 ~ "Trans male",
+    demo_gender_id_v2 == 4 ~ "Trans female",
+    demo_gender_id_v2 == 5 ~ "Gender queer",
+    demo_gender_id_v2 == 6 ~ "Different",
+    demo_gender_id_v2 == 777 ~ "Refuse to answer",
+    demo_gender_id_v2 == 999 ~ "Don't know",
+    TRUE ~ as.character(demo_gender_id_v2)
+  ))
+
+demo <- demo %>%
+  mutate(race_ethnicity = case_when(
+    race_ethnicity == 1 ~ "White",
+    race_ethnicity == 2 ~ "Black",
+    race_ethnicity == 3 ~ "Hispanic",
+    race_ethnicity == 4 ~ "Asian",
+    race_ethnicity == 5 ~ "Other",
+    TRUE ~ as.character(race_ethnicity)
+  ))
+
+```
+
+
+```{r}
+# summarize 
+summarize_demographics <- function(data) {
+  age_summary <- data %>%
+    summarise(mean_age = mean(demo_brthdat_v2, na.rm = TRUE),
+              sd_age = sd(demo_brthdat_v2, na.rm = TRUE))
+  
+  sex_summary <- data %>%
+    group_by(demo_sex_v2) %>%
+    summarise(count = n()) %>%
+    mutate(percentage = count / sum(count) * 100)
+  
+  
+  race_summary <- data %>%
+    group_by(race_ethnicity) %>%
+    summarise(count = n()) %>%
+    mutate(percentage = count / sum(count) * 100)
+  
+  list(age = age_summary, sex = sex_summary, race = race_summary)
+}
+
+#c calculate summary data 
+summary_data <- summarize_demographics(demo)  
+
+# make output for methods section
+generate_methods_summary <- function(summary_data) {
+  # Age summary
+  age_text <- paste0("The mean age of participants was ", round(summary_data$age$mean_age, 2), 
+                     " years with a standard deviation of ", round(summary_data$age$sd_age, 2), ".")
+
+  # Sex summary
+  sex_text <- paste0("Of the participants, ", 
+                     paste(summary_data$sex$demo_sex_v2, ": ", 
+                           round(summary_data$sex$percentage, 1), "% (", 
+                           summary_data$sex$count, ")", collapse = "; "), 
+                     ".")
+
+  # Race summary
+  race_text <- paste0("The racial/ethnic composition was ", 
+                      paste(summary_data$race$race_ethnicity, ": ", 
+                            round(summary_data$race$percentage, 1), "% (", 
+                            summary_data$race$count, ")", collapse = "; "), 
+                      ".")
+
+  # Combine all summaries into one paragraph
+  method_summary <- paste(age_text, sex_text, race_text, sep = " ")
+  return(method_summary)
+}
+
+# Step 4: Use the function to create the summary text
+methods_summary <- generate_methods_summary(summary_data)
+cat(methods_summary)
+
+```
+
+
+## Cognition
+```{r}
+cogn <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/neurocognition/nc_y_nihtb.csv") %>%
+  filter(eventname == "baseline_year_1_arm_1")  %>%
+  select(src_subject_id, 
+         nihtbx_totalcomp_fc #NIH toolbox - cognition total
+         ) 
+
+#merge based on subid list
+cogn <- cogn[cogn$src_subject_id %in% subids$src_subject_id, ]
+
+```
+
+
+#Psyhciatric diangosis
+
+Healthy vs OCD
+```{r}
+diagnosis <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/mental-health/mh_p_ksads_ss.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id, ksads_11_917_p)   # Present diagnosis OCD F42
+ 
+
+subids <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/demo_subid.csv")
+
+
+#merge
+full_dat <- diagnosis[diagnosis$src_subject_id %in% subids$src_subject_id, ]
+
+
+# Calculate counts and percentages
+ocd_counts <- full_dat %>%
+  group_by(ksads_11_917_p) %>%
+  summarise(count = n()) %>%
+  mutate(percent = (count / sum(count)) * 100)
+
+print(ocd_counts)
+
+
+#Save ksad= 1
+
+full_dat <- full_dat %>%
+  filter(ksads_11_917_p == "0")
+```
+
+OCD group
+```{r}
+
+# Load additional comorbidities data
+all_ksads_diagnosis <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/comorbidities.csv") %>%
+  select(
+    src_subject_id,
+    adhd,
+    any_bipolar,
+    any_conduct_odd,
+    any_depressive_disorder,
+    any_anxiety_disorder,
+    any_drug_use_disorder,
+    any_eating_disorder,
+    ptsd,
+    any_suicidality,
+    no_diagnosis,
+    only_ocd,
+    comorbidities
+  ) 
+
+# Merge with filtered OCD group
+full_dat <- all_ksads_diagnosis %>%
+  filter(src_subject_id %in% full_dat$src_subject_id)
+
+# Calculate total subjects for percentage calculation
+total_subjects <- nrow(full_dat)
+
+# Group the data and calculate counts and percentages
+summary_stats <- full_dat %>%
+  mutate(
+    group = case_when(
+      only_ocd == 1 ~ "Only OCD",
+      no_diagnosis == 1 ~ "No Diagnosis",
+      comorbidities > 0 ~ "OCD with Comorbidities",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(group)) %>%
+  group_by(group) %>%
+  summarise(
+    count = n(),
+    percent = (count / total_subjects) * 100
+  )
+
+# Print the summary statistics
+print(summary_stats)
+```
+
+```{r}
+all_ksads_diagnosis <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/mental-health/mh_p_ksads_ss.csv") %>%
+  filter(
+    eventname == "2_year_follow_up_y_arm_1",
+    !is.na(ksads_11_917_p)  # Remove rows where ksads_11_917_p is NA
+  ) %>%
+  select(src_subject_id, ksads_11_917_p)
+
+# Number of occurrences of ksads_11_917_p equal to 1
+count_1 <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p == 1) %>%
+  summarise(count = n())
+
+# Number of occurrences of ksads_11_917_p equal to 0
+count_0 <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p == 0) %>%
+  summarise(count = n())
+
+# Print results
+print(paste("Count of 1:", count_1$count))
+print(paste("Count of 0:", count_0$count))
+
+```
+
+save subject list
+```{r}
+all_ksads_diagnosis <- all_ksads_diagnosis %>%
+  select(
+    src_subject_id,
+    ksads_11_917_p
+  )
+
+write.csv(all_ksads_diagnosis, "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/src_subject_id.csv", row.names = FALSE)
+```
+
+## Cognition
+```{r}
+cogn <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/neurocognition/nc_y_nihtb.csv")%>%
+  filter(eventname == "2_year_follow_up_y_arm_1") 
+
+# Select only the specified columns
+cogn <- cogn %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id, 
+         nihtbx_totalcomp_fc #NIH toolbox - cognition total
+         ) 
+```
+
+## Parental Education Level 
+
+```{r}
+
+```
+
+# Family History of Mental Illness 
+
+```{r}
+
+```
+
+# SES 
+
+```{r}
+
+```
+

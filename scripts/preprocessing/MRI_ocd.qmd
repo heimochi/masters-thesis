@@ -1,0 +1,100 @@
+---
+title: "MRI cleaning for OCD"
+author: "MochiBear.Hei"
+date: "12.16.2024"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Data manipulation
+library(dplyr)
+library(tidyr)
+
+# Plotting
+library(ggplot2)
+
+# Utilities
+library(knitr)
+```
+
+#Volume 
+
+```{r}
+cortical <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/imaging/mri_y_smr_vol_dst.csv")%>%
+  filter(eventname == "2_year_follow_up_y_arm_1")%>%
+  select(-eventname)
+
+subcortical <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/imaging/mri_y_smr_vol_aseg.csv")%>%
+  filter(eventname == "2_year_follow_up_y_arm_1")%>%
+  select(-eventname)
+```
+
+# Correct for intracrainal Volume only for subcortical volume
+```{r}
+icv_column <- "smri_vol_scs_intracranialv"
+
+# divide brain areas by icv except for subject identifier and the ICV column
+subcortical <- subcortical %>%
+  mutate(across(!c(src_subject_id, icv_column), ~ .x / .data[[icv_column]]))
+
+head(subcortical)
+
+```
+
+# Merge MRI
+```{r}
+mri <- cortical %>%
+  left_join(subcortical, by = c("src_subject_id")) 
+```
+
+
+### Save as csv
+```{r}
+write.csv(normalized_mri, "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/mri.csv", row.names = FALSE)
+```
+

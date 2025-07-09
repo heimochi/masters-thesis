@@ -1,0 +1,294 @@
+---
+title: "Results"
+author: "MochiBear.Hei"
+date: "03.20.2025"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Load required libraries
+library(dplyr)
+library(kableExtra)
+
+library(knitr)
+
+# Data manipulation
+library(dplyr)
+library(tidyr)
+library(gridExtra)
+
+# Modeling
+library(caret)
+library(xgboost)
+
+# Plotting
+library(ggplot2)
+library(viridis)      
+
+# Utilities
+library(knitr)
+library(data.table) # This is often used for efficient data manipulation
+
+# Possibly useful for advanced plotting or customizing facets
+library(scales)      # If you need to manipulate scales in ggplot2
+```
+
+
+
+# Optimal tuning for all models
+```{r}
+###############
+# Create the data frame with correct column names and values
+df <- data.frame(
+  "Boosting Rounds" = c(100, 50, 100, 50),
+  "Max Tree Depth" = c(2, 2, 2, 2),
+  "Learning Rate" = c(0.05, 0.05, 0.05, 0.05),
+  "Gamma" = c(1, 1, 1, 1),
+  "Minimum Child Weight" = c(1, 2, 2, 2),
+  "Column Sampling Rate" = c(0.6, 0.6, 0.8, 0.8),
+  "Row Sampling Rate" = c(0.6, 0.6, 0.6, 0.8),
+  row.names = c("Parent-Reported I", "Child-Reported I", "Parent-Reported E", "Child-Reported E"),
+  check.names = FALSE # Keeps column names with spaces
+)
+
+# Transpose and format the data
+df_tidy <- as.data.frame(t(df), stringsAsFactors = FALSE)
+colnames(df_tidy) <- rownames(df)
+df_tidy <- cbind("Tuning Parameter" = rownames(df_tidy), df_tidy)
+rownames(df_tidy) <- NULL
+
+# Format numeric values to avoid scientific notation
+df_tidy[, -1] <- lapply(df_tidy[, -1], function(x) format(as.numeric(x), scientific = FALSE))
+
+# Load kableExtra and create the table with grouped columns
+df_tidy %>%
+  kbl(caption = "XGBoost: Optimal Hyperparameters for Each Model") %>%
+  kable_classic(full_width = FALSE) %>%
+  add_header_above(c(" " = 1, "Internalizing" = 2, "Externalizing" = 2)) # Only label the columns once
+
+
+```
+
+#Evaluation Metrics AUC 
+
+```{r}
+
+
+```
+
+
+# Evaluation Metrics (RMSE)
+```{r}
+# Create the data frame with performance metrics and values
+df_performance <- data.frame(
+  "RMSE" = c(0.919730718, 0.9168228465, 0.9019472, 0.920842316),
+  "R²" = c(0.001265298, 0.0004860737, 0.000002685264, 0.001395696),
+  "MAE" = c(0.753496551, 0.7155568886, 0.7590643, 0.652562455),
+  row.names = c("Parent-Reported I", "Child-Reported I", "Parent-Reported E", "Child-Reported E"),
+  check.names = FALSE # Keeps column names with spaces
+)
+
+# Transpose and format the data
+df_performance_tidy <- as.data.frame(t(df_performance), stringsAsFactors = FALSE)
+colnames(df_performance_tidy) <- rownames(df_performance)
+df_performance_tidy <- cbind("Performance Metric" = rownames(df_performance_tidy), df_performance_tidy)
+rownames(df_performance_tidy) <- NULL
+
+# Round numeric values to 4 decimal places
+df_performance_tidy[, -1] <- lapply(df_performance_tidy[, -1], function(x) round(as.numeric(x), 4))
+
+# Load kableExtra and create the table with grouped columns
+df_performance_tidy %>%
+  kbl(caption = "Evaluation of Model Performance on Test Data") %>%
+  kable_classic(full_width = FALSE) %>%
+  add_header_above(c(" " = 1, "Internalizing" = 2, "Externalizing" = 2)) # Grouped under "Internalizing" and "Externalizing"
+
+
+```
+
+#Dictionaries 
+## Preformance Metrics
+```{r}
+# Create performance metric dictionary - neuroscience audience friendly
+perf_df <- data.frame(
+  Metric = c("RMSE", "MAE", "R²"),
+  Description = c(
+    "Estimates a model's predictive accuracy is determined by calculating the average difference between the predicted values and the observed values.",
+    "Measures the average size of the errors in predictions, and is a sum of absolute errors. Lower values mean the model is more accurate.",
+    "Indicates how well the model explains variation in the actual data. A value of 1 means perfect prediction, while 0 means the model does not explain any variance."
+  ),
+  stringsAsFactors = FALSE
+)
+
+# Generate the table
+perf_df %>%
+  kbl(caption = "Descriptions of Model Performance Metrics (Neuroscience Audience)") %>%
+  kable_classic(full_width = FALSE)
+
+```
+
+## Tuning parameters
+```{r}
+# Create the data
+param_df <- data.frame(
+  Type = c("", "", "", 
+               "", "", "", ""),
+  Parameter = c(
+    "Boosting Rounds",
+    "Max Tree Depth",
+    "Learning Rate",
+    "Gamma",
+    "Minimum Child Weight",
+    "Column Sampling Rate",
+    "Row Sampling Rate"
+  ),
+  Description = c(
+    "Number of boosting iterations (trees) used in the model.",
+    "Maximum depth of each decision tree, limiting the model’s complexity.",
+    "Controls the learning rate; smaller values allow for cautious learning to reduce overfitting.",
+    "Minimum improvement required for making a new split, controlling tree growth.",
+    "Minimum data required in a leaf node before further splitting, promoting simpler trees.",
+    "Fraction of predictor variables used for each tree, ensuring diversity.",
+    "Fraction of training data used for building each tree, enhancing model robustness."
+),
+  stringsAsFactors = FALSE
+)
+
+# Generate the styled table
+param_df %>%
+  arrange(Type) %>%
+  kbl(caption = "Descriptions of XGBoost Hyperparameters") %>%
+  kable_classic(full_width = FALSE) %>%
+  pack_rows("Core Parameters", 1, 3) %>%
+  pack_rows("Regularization", 4, 4) %>%
+  pack_rows("Sampling", 5, 7)
+
+```
+
+
+```{r}
+
+
+```
+
+
+
+```{r}
+
+
+```
+
+
+
+
+```{r}
+
+
+```
+
+
+```{r}
+
+
+```
+
+
+
+```{r}
+
+
+```
+
+
+
+
+```{r}
+
+
+```
+
+
+```{r}
+
+
+```
+
+
+
+```{r}
+
+
+```
+
+
+
+
+```{r}
+
+
+```
+
+
+```{r}
+
+
+```
+
+
+
+```{r}
+
+
+```
+
+
+
+
+```{r}
+
+
+```

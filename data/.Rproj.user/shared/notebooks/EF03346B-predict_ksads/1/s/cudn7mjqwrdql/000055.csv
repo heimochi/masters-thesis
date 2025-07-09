@@ -1,0 +1,6 @@
+"0","# Probabilities
+pred_probs <- predict(bst, dtest)
+"
+"2","Error in predict.xgb.Booster(bst, dtest) : 
+  Feature names stored in `object` and `newdata` are different!
+"

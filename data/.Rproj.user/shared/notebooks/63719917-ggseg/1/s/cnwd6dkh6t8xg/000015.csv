@@ -1,0 +1,20 @@
+"0","# List of regions you want to highlight
+regions_of_interest <- c(
+  ""Thalamus-Proper"",
+  ""Caudate"",
+  ""Putamen"",
+  ""Pallidum"",
+  ""Amygdala"",
+  ""Accumbens-area""
+)
+
+# Create a dataframe
+aseg_highlight <- aseg %>%
+  distinct(region, side) %>%  # Only keep one row per region+side
+  mutate(
+    value = ifelse(region %in% regions_of_interest, 1, NA)  # 1 for your regions, NA for others
+  )
+"
+"2","Error in UseMethod(""distinct"") : 
+  no applicable method for 'distinct' applied to an object of class ""brain_atlas""
+"

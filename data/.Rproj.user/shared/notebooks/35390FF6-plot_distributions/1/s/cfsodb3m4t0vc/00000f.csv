@@ -1,0 +1,8 @@
+"0",""
+"0","# Combine predicted and actual values into a data frame"
+"0","results <- data.frame("
+"0","  Actual = y_test,"
+"0","  Predicted = preds"
+"0",")"
+"2","Error: object 'y_test' not found
+"

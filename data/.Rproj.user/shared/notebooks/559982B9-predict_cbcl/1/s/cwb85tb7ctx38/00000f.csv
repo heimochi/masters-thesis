@@ -1,0 +1,5 @@
+"0","##list of people to include from flow script"
+"0","subids <- read.csv(""/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/subids.csv"") %>%"
+"0","  select(src_subject_id, ksads_11_917_p) %>% #categorical diagnosis of ocd from ksads , 0 = no ocd current or present diagnosis"
+"0","  mutate(ksads_11_917_p = as.factor(ksads_11_917_p)) # Convert to factor"
+"0",""

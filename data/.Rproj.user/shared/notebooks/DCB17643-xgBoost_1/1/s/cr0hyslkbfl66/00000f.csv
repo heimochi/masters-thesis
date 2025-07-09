@@ -1,0 +1,3 @@
+"0","# Mean imputation for age "
+"0","mean_age <- mean(demo$demo_brthdat_v2, na.rm = TRUE)"
+"0","demo$demo_brthdat_v2[is.na(demo$demo_brthdat_v2)] <- mean_age"

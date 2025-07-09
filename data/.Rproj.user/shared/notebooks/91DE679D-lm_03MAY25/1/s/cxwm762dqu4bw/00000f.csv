@@ -1,0 +1,14 @@
+"0","# --- Load SES Latent Factors ---"
+"0","latent <- read_csv(""/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/abcd-general/abcd_y_lf.csv"") %>%"
+"0","  select(-eventname)"
+"2","[1mRows: [22m[34m8151[39m [1mColumns: [22m[34m5[39m"
+"2","[36m──[39m [1mColumn specification[22m [36m──────────────────────────────────────────────────────────────────────[39m
+[1mDelimiter:[22m "",""
+[31mchr[39m (2): src_subject_id, eventname
+[32mdbl[39m (3): latent_factor_ss_general_ses, latent_factor_ss_social, latent_factor_ss_perinatal"
+"2","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message."
+"0","# Convert SES variables to numeric"
+"0","latent <- latent %>%"
+"0","  mutate(across(starts_with(""latent_factor_ss_""), as.numeric))"

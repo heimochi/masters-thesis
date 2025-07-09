@@ -1,0 +1,624 @@
+---
+title: "xgboost: Parent Internalizing"
+author: "MochiBear.Hei"
+date: "01.10.2025"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+library(dplyr)
+library(tidyr)
+# test scatterplot matrix 
+library(ggcorrplot)
+library(GGally)
+```
+
+# Load
+
+Target variable: internalizing scale
+```{r}
+p_data <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/p_data.csv")%>% #10896x2
+  select("src_subject_id", "cbcl_scr_syn_internal_t")
+
+# Convert and scale the target variable
+p_data$cbcl_scr_syn_internal_t <- scale(as.numeric(p_data$cbcl_scr_syn_internal_t))  #scaled it? idk if necessary
+```
+
+Demographics
+```{r, echo: false}
+#KSADS demographics
+demo <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/demo.csv") %>% #11868x4
+  select(-demo_gender_id_v2)
+
+demo$demo_sex_v2 <- as.factor(demo$demo_sex_v2)
+demo$race_ethnicity <- as.factor(demo$race_ethnicity)
+demo$demo_brthdat_v2 <- as.numeric(demo$demo_brthdat_v2)
+
+```
+
+SES variables
+```{r}
+latent <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/abcd-general/abcd_y_lf.csv") %>%   #8151x4
+  select(-eventname)
+
+latent$latent_factor_ss_general_ses <- as.numeric(latent$latent_factor_ss_general_ses)
+latent$latent_factor_ss_social <- as.numeric(latent$latent_factor_ss_social)
+latent$latent_factor_ss_perinatal <- as.numeric(latent$latent_factor_ss_perinatal)
+ #what should I do about the missing in the SES variables?
+```
+
+MRI
+```{r}
+# DESKIAN ATLAS: MRI year 2 follow up
+mri <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/desikan_v.csv") %>% drop_na() #8092x72
+
+# Convert integer columns to numeric
+mri <- as.data.frame(lapply(mri, function(x) {
+  if (is.integer(x)) {
+    as.numeric(x)
+  } else {
+    x
+  }
+}))
+
+# Identify numeric columns
+numeric_cols <- sapply(mri, is.numeric)
+
+# Scale only the numeric columns
+mri[numeric_cols] <- scale(mri[numeric_cols])
+
+```
+
+# Make datasets
+Demo only dataset
+```{r}
+demo <- demo %>%
+  left_join(p_data, by = "src_subject_id") #11868x4
+
+#leave out test set
+set.seed(123)  
+
+# Determine the number of observations
+n <- nrow(demo)
+
+# Create a random sample of row indices for the training set
+train_indices <- sample(1:n, size = round(0.7 * n))
+
+# Split the data into training and test sets
+demo_train_data <- demo[train_indices, ]
+demo_test_data <- demo[-train_indices, ]
+
+# Check the dimensions to confirm the split
+cat("Training data dimensions:", dim(demo_train_data), "\n")
+cat("Test data dimensions:", dim(demo_test_data), "\n")
+
+demo <- demo %>%
+  select(-cbcl_scr_syn_internal_t)
+
+```
+Latent only dataset
+```{r}
+latent <- latent %>%
+  left_join(p_data, by = "src_subject_id")
+
+#leave out test set
+set.seed(123)  
+
+# Determine the number of observations
+n <- nrow(latent)
+
+# Create a random sample of row indices for the training set
+train_indices <- sample(1:n, size = round(0.7 * n))
+
+# Split the data into training and test sets
+latent_train_data <- latent[train_indices, ]
+latent_test_data <- latent[-train_indices, ]
+
+# Check the dimensions to confirm the split
+cat("Training data dimensions:", dim(latent_train_data), "\n")
+cat("Test data dimensions:", dim(latent_test_data), "\n")
+
+latent <- latent %>%
+  select(-cbcl_scr_syn_internal_t)
+```
+
+MRI only dataset
+```{r}
+mri <- mri %>%
+  left_join(p_data, by = "src_subject_id") 
+
+#leave out test set
+set.seed(123)  
+
+# Determine the number of observations
+n <- nrow(mri)
+
+# Create a random sample of row indices for the training set
+train_indices <- sample(1:n, size = round(0.7 * n))
+
+# Split the data into training and test sets
+mri_train_data <- mri[train_indices, ]
+mri_test_data <- mri[-train_indices, ]
+
+# Check the dimensions to confirm the split
+cat("Training data dimensions:", dim(mri_train_data), "\n")
+cat("Test data dimensions:", dim(mri_test_data), "\n")
+
+mri <- mri %>%
+  select(-cbcl_scr_syn_internal_t)
+
+```
+
+MRI + Demo
+```{r}
+#create MRI + demo dataset
+demo_mri <- demo %>%
+  left_join(mri, by = c("src_subject_id")) %>%
+  left_join(p_data, by = "src_subject_id") %>% drop_na()
+
+#leave out test data
+set.seed(123)  
+
+# Determine the number of observations
+n <- nrow(demo_mri)
+
+# Create a random sample of row indices for the training set
+train_indices <- sample(1:n, size = round(0.7 * n))
+
+# Split the data into training and test sets
+demo_mri_train_data <- demo_mri[train_indices, ]
+demo_mri_test_data <- demo_mri[-train_indices, ]
+
+# Check the dimensions to confirm the split
+cat("Training data dimensions:", dim(demo_mri_train_data), "\n")
+cat("Test data dimensions:", dim(demo_mri_test_data), "\n")
+```
+
+MRI + latent
+```{r}
+#create MRI + demo dataset
+latent_mri <- latent %>%
+  left_join(mri, by = c("src_subject_id")) %>%
+  left_join(p_data, by = "src_subject_id") %>% drop_na() 
+
+#leave out test data
+set.seed(123)  
+
+# Determine the number of observations
+n <- nrow(latent_mri)
+
+# Create a random sample of row indices for the training set
+train_indices <- sample(1:n, size = round(0.7 * n))
+
+# Split the data into training and test sets
+latent_mri_train_data <- latent_mri[train_indices, ]
+latent_mri_test_data <- latent_mri[-train_indices, ]
+
+# Check the dimensions to confirm the split
+cat("Training data dimensions:", dim(latent_mri_train_data), "\n")
+cat("Test data dimensions:", dim(latent_mri_test_data), "\n")
+```
+Demo + latent
+```{r}
+## Latent variables: social, general, perinatal  
+latent_demo <- latent %>%
+  left_join(demo, by = "src_subject_id") %>%
+  left_join(p_data, by = "src_subject_id") %>% drop_na() 
+
+#leave out test data
+set.seed(123)  
+
+# Determine the number of observations
+n <- nrow(latent_demo)
+
+# Create a random sample of row indices for the training set
+train_indices <- sample(1:n, size = round(0.7 * n))
+
+# Split the data into training and test sets
+latent_demo_train_data <- latent_demo[train_indices, ]
+latent_demo_test_data <- latent_demo[-train_indices, ]
+
+# Check the dimensions to confirm the split
+cat("Training data dimensions:", dim(latent_demo_train_data), "\n")
+cat("Test data dimensions:", dim(latent_demo_test_data), "\n")
+```
+
+MRI + Demo + latent
+```{r}
+#create MRI + demo dataset
+latent_demo_mri <- latent_demo %>%
+  left_join(mri, by = c("src_subject_id")) %>% drop_na()
+
+#leave out test data
+set.seed(123)  
+
+# Determine the number of observations
+n <- nrow(latent_demo_mri)
+
+# Create a random sample of row indices for the training set
+train_indices <- sample(1:n, size = round(0.7 * n))
+
+# Split the data into training and test sets
+latent_demo_mri_train_data <- latent_demo_mri[train_indices, ]
+latent_demo_mri_test_data <- latent_demo_mri[-train_indices, ]
+
+# Check the dimensions to confirm the split
+cat("Training data dimensions:", dim(latent_demo_mri_train_data), "\n")
+cat("Test data dimensions:", dim(latent_demo_mri_test_data), "\n")
+```
+
+
+# Linear Models 
+## Demo 
+```{r}
+# Only basic demographic variables 
+lm_model <- lm(cbcl_scr_syn_internal_t ~ demo_brthdat_v2 + demo_sex_v2 + race_ethnicity, data = demo_train_data)
+
+# Output model summary
+summary(lm_model)
+```
+
+## Latent 
+```{r}
+#only ses, social, and perinatal
+lm_model <- lm(cbcl_scr_syn_internal_t ~ 
+               latent_factor_ss_general_ses + latent_factor_ss_social + 
+               latent_factor_ss_perinatal, data = latent_train_data)
+
+# Output model summary
+summary(lm_model)
+```
+
+## MRI
+```{r}
+# Extend the linear model to smri
+lm_model <- lm(cbcl_scr_syn_internal_t ~ 
+               smri_vol_cdk_banksstslh + smri_vol_cdk_cdacatelh + 
+               smri_vol_cdk_cdmdfrlh + smri_vol_cdk_cuneuslh + 
+               smri_vol_cdk_ehinallh + smri_vol_cdk_fusiformlh + 
+               smri_vol_cdk_ifpllh + smri_vol_cdk_iftmlh + 
+               smri_vol_cdk_ihcatelh + smri_vol_cdk_locclh + 
+               smri_vol_cdk_lobfrlh + smri_vol_cdk_linguallh + 
+               smri_vol_cdk_mobfrlh + smri_vol_cdk_mdtmlh + 
+               smri_vol_cdk_parahpallh + smri_vol_cdk_paracnlh + 
+               smri_vol_cdk_parsopclh + smri_vol_cdk_parsobislh + 
+               smri_vol_cdk_parstgrislh + smri_vol_cdk_pericclh + 
+               smri_vol_cdk_postcnlh + smri_vol_cdk_ptcatelh + 
+               smri_vol_cdk_precnlh + smri_vol_cdk_pclh + 
+               smri_vol_cdk_rracatelh + smri_vol_cdk_rrmdfrlh + 
+               smri_vol_cdk_sufrlh + smri_vol_cdk_supllh + 
+               smri_vol_cdk_sutmlh + smri_vol_cdk_smlh + 
+               smri_vol_cdk_frpolelh + smri_vol_cdk_tmpolelh + 
+               smri_vol_cdk_trvtmlh + smri_vol_cdk_insulalh + 
+               smri_vol_cdk_banksstsrh + smri_vol_cdk_cdacaterh + 
+               smri_vol_cdk_cdmdfrrh + smri_vol_cdk_cuneusrh + 
+               smri_vol_cdk_ehinalrh + smri_vol_cdk_fusiformrh + 
+               smri_vol_cdk_ifplrh + smri_vol_cdk_iftmrh + 
+               smri_vol_cdk_ihcaterh + smri_vol_cdk_loccrh + 
+               smri_vol_cdk_lobfrrh + smri_vol_cdk_lingualrh + 
+               smri_vol_cdk_mobfrrh + smri_vol_cdk_mdtmrh + 
+               smri_vol_cdk_parahpalrh + smri_vol_cdk_paracnrh + 
+               smri_vol_cdk_parsopcrh + smri_vol_cdk_parsobisrh + 
+               smri_vol_cdk_parstgrisrh + smri_vol_cdk_periccrh + 
+               smri_vol_cdk_postcnrh + smri_vol_cdk_ptcaterh + 
+               smri_vol_cdk_precnrh + smri_vol_cdk_pcrh + 
+               smri_vol_cdk_rracaterh + smri_vol_cdk_rrmdfrrh + 
+               smri_vol_cdk_sufrrh + smri_vol_cdk_suplrh + 
+               smri_vol_cdk_sutmrh + smri_vol_cdk_smrh + 
+               smri_vol_cdk_frpolerh + smri_vol_cdk_tmpolerh + 
+               smri_vol_cdk_trvtmrh + smri_vol_cdk_insularh + 
+               smri_vol_cdk_totallh + smri_vol_cdk_totalrh + 
+               smri_vol_cdk_total, data = mri_train_data)
+# Output model summary
+summary(lm_model)
+```
+Correlation plot
+```{r}
+
+corr_data_mri <- mri_train_data%>%
+  select(-c(src_subject_id, cbcl_scr_syn_internal_t))
+
+corr_mri <- cor(corr_data_mri)
+
+
+mri.corr.pmat <- cor_pmat(corr_data_mri)
+
+
+ggcorrplot(corr_mri, hc.order = TRUE, type = "lower", p.mat = mri.corr.pmat, insig = "blank")
+
+
+#only for first 5 variables cuz the plot looks so messy
+test_data <- corr_data_mri[,1:5]
+pairs(test_data)
+
+```
+```{r}
+# Checking linear dependencies among predictors without graphs cuz too messy
+full_model <- lm(lm_model, data = demo_mri)
+print(alias(full_model))
+```
+Interested in specific regions?, remove: 
+= smri_vol_cdk_totallh, smri_vol_cdk_totalrh, or smri_vol_cdk_total
+Interested in total volume measurements?, remove:
+= exclude the specific regional volumes and retain the total volume measurements
+MRI without colinear variables
+```{r}
+# Extend the linear model to smri
+lm_model <- lm(cbcl_scr_syn_internal_t ~ 
+               smri_vol_cdk_banksstslh + smri_vol_cdk_cdacatelh + 
+               smri_vol_cdk_cdmdfrlh + smri_vol_cdk_cuneuslh + 
+               smri_vol_cdk_ehinallh + smri_vol_cdk_fusiformlh + 
+               smri_vol_cdk_ifpllh + smri_vol_cdk_iftmlh + 
+               smri_vol_cdk_ihcatelh + smri_vol_cdk_locclh + 
+               smri_vol_cdk_lobfrlh + smri_vol_cdk_linguallh + 
+               smri_vol_cdk_mobfrlh + smri_vol_cdk_mdtmlh + 
+               smri_vol_cdk_parahpallh + smri_vol_cdk_paracnlh + 
+               smri_vol_cdk_parsopclh + smri_vol_cdk_parsobislh + 
+               smri_vol_cdk_parstgrislh + smri_vol_cdk_pericclh + 
+               smri_vol_cdk_postcnlh + smri_vol_cdk_ptcatelh + 
+               smri_vol_cdk_precnlh + smri_vol_cdk_pclh + 
+               smri_vol_cdk_rracatelh + smri_vol_cdk_rrmdfrlh + 
+               smri_vol_cdk_sufrlh + smri_vol_cdk_supllh + 
+               smri_vol_cdk_sutmlh + smri_vol_cdk_smlh + 
+               smri_vol_cdk_frpolelh + smri_vol_cdk_tmpolelh + 
+               smri_vol_cdk_trvtmlh + smri_vol_cdk_insulalh + 
+               smri_vol_cdk_banksstsrh + smri_vol_cdk_cdacaterh + 
+               smri_vol_cdk_cdmdfrrh + smri_vol_cdk_cuneusrh + 
+               smri_vol_cdk_ehinalrh + smri_vol_cdk_fusiformrh + 
+               smri_vol_cdk_ifplrh + smri_vol_cdk_iftmrh + 
+               smri_vol_cdk_ihcaterh + smri_vol_cdk_loccrh + 
+               smri_vol_cdk_lobfrrh + smri_vol_cdk_lingualrh + 
+               smri_vol_cdk_mobfrrh + smri_vol_cdk_mdtmrh + 
+               smri_vol_cdk_parahpalrh + smri_vol_cdk_paracnrh + 
+               smri_vol_cdk_parsopcrh + smri_vol_cdk_parsobisrh + 
+               smri_vol_cdk_parstgrisrh + smri_vol_cdk_periccrh + 
+               smri_vol_cdk_postcnrh + smri_vol_cdk_ptcaterh + 
+               smri_vol_cdk_precnrh + smri_vol_cdk_pcrh + 
+               smri_vol_cdk_rracaterh + smri_vol_cdk_rrmdfrrh + 
+               smri_vol_cdk_sufrrh + smri_vol_cdk_suplrh + 
+               smri_vol_cdk_sutmrh + smri_vol_cdk_smrh + 
+               smri_vol_cdk_frpolerh + smri_vol_cdk_tmpolerh + 
+               smri_vol_cdk_trvtmrh + smri_vol_cdk_insularh,
+               data = mri_train_data)
+# Output model summary
+summary(lm_model)
+```
+## MRI + Demo
+removed smri_vol_cdk_totallh, smri_vol_cdk_totalrh, and smri_vol_cdk_total
+```{r}
+lm_model <- lm(cbcl_scr_syn_internal_t ~ demo_brthdat_v2 + demo_sex_v2 + race_ethnicity +
+               smri_vol_cdk_banksstslh + smri_vol_cdk_cdacatelh + 
+               smri_vol_cdk_cdmdfrlh + smri_vol_cdk_cuneuslh + 
+               smri_vol_cdk_ehinallh + smri_vol_cdk_fusiformlh + 
+               smri_vol_cdk_ifpllh + smri_vol_cdk_iftmlh + 
+               smri_vol_cdk_ihcatelh + smri_vol_cdk_locclh + 
+               smri_vol_cdk_lobfrlh + smri_vol_cdk_linguallh + 
+               smri_vol_cdk_mobfrlh + smri_vol_cdk_mdtmlh + 
+               smri_vol_cdk_parahpallh + smri_vol_cdk_paracnlh + 
+               smri_vol_cdk_parsopclh + smri_vol_cdk_parsobislh + 
+               smri_vol_cdk_parstgrislh + smri_vol_cdk_pericclh + 
+               smri_vol_cdk_postcnlh + smri_vol_cdk_ptcatelh + 
+               smri_vol_cdk_precnlh + smri_vol_cdk_pclh + 
+               smri_vol_cdk_rracatelh + smri_vol_cdk_rrmdfrlh + 
+               smri_vol_cdk_sufrlh + smri_vol_cdk_supllh + 
+               smri_vol_cdk_sutmlh + smri_vol_cdk_smlh + 
+               smri_vol_cdk_frpolelh + smri_vol_cdk_tmpolelh + 
+               smri_vol_cdk_trvtmlh + smri_vol_cdk_insulalh + 
+               smri_vol_cdk_banksstsrh + smri_vol_cdk_cdacaterh + 
+               smri_vol_cdk_cdmdfrrh + smri_vol_cdk_cuneusrh + 
+               smri_vol_cdk_ehinalrh + smri_vol_cdk_fusiformrh + 
+               smri_vol_cdk_ifplrh + smri_vol_cdk_iftmrh + 
+               smri_vol_cdk_ihcaterh + smri_vol_cdk_loccrh + 
+               smri_vol_cdk_lobfrrh + smri_vol_cdk_lingualrh + 
+               smri_vol_cdk_mobfrrh + smri_vol_cdk_mdtmrh + 
+               smri_vol_cdk_parahpalrh + smri_vol_cdk_paracnrh + 
+               smri_vol_cdk_parsopcrh + smri_vol_cdk_parsobisrh + 
+               smri_vol_cdk_parstgrisrh + smri_vol_cdk_periccrh + 
+               smri_vol_cdk_postcnrh + smri_vol_cdk_ptcaterh + 
+               smri_vol_cdk_precnrh + smri_vol_cdk_pcrh + 
+               smri_vol_cdk_rracaterh + smri_vol_cdk_rrmdfrrh + 
+               smri_vol_cdk_sufrrh + smri_vol_cdk_suplrh + 
+               smri_vol_cdk_sutmrh + smri_vol_cdk_smrh + 
+               smri_vol_cdk_frpolerh + smri_vol_cdk_tmpolerh + 
+               smri_vol_cdk_trvtmrh + smri_vol_cdk_insularh,
+               data = demo_mri_train_data)
+
+# Output model summary
+summary(lm_model)
+
+```
+
+## MRI + latent 
+```{r}
+lm_model <- lm(cbcl_scr_syn_internal_t ~ latent_factor_ss_general_ses + latent_factor_ss_social + 
+               latent_factor_ss_perinatal +
+               smri_vol_cdk_banksstslh + smri_vol_cdk_cdacatelh + 
+               smri_vol_cdk_cdmdfrlh + smri_vol_cdk_cuneuslh + 
+               smri_vol_cdk_ehinallh + smri_vol_cdk_fusiformlh + 
+               smri_vol_cdk_ifpllh + smri_vol_cdk_iftmlh + 
+               smri_vol_cdk_ihcatelh + smri_vol_cdk_locclh + 
+               smri_vol_cdk_lobfrlh + smri_vol_cdk_linguallh + 
+               smri_vol_cdk_mobfrlh + smri_vol_cdk_mdtmlh + 
+               smri_vol_cdk_parahpallh + smri_vol_cdk_paracnlh + 
+               smri_vol_cdk_parsopclh + smri_vol_cdk_parsobislh + 
+               smri_vol_cdk_parstgrislh + smri_vol_cdk_pericclh + 
+               smri_vol_cdk_postcnlh + smri_vol_cdk_ptcatelh + 
+               smri_vol_cdk_precnlh + smri_vol_cdk_pclh + 
+               smri_vol_cdk_rracatelh + smri_vol_cdk_rrmdfrlh + 
+               smri_vol_cdk_sufrlh + smri_vol_cdk_supllh + 
+               smri_vol_cdk_sutmlh + smri_vol_cdk_smlh + 
+               smri_vol_cdk_frpolelh + smri_vol_cdk_tmpolelh + 
+               smri_vol_cdk_trvtmlh + smri_vol_cdk_insulalh + 
+               smri_vol_cdk_banksstsrh + smri_vol_cdk_cdacaterh + 
+               smri_vol_cdk_cdmdfrrh + smri_vol_cdk_cuneusrh + 
+               smri_vol_cdk_ehinalrh + smri_vol_cdk_fusiformrh + 
+               smri_vol_cdk_ifplrh + smri_vol_cdk_iftmrh + 
+               smri_vol_cdk_ihcaterh + smri_vol_cdk_loccrh + 
+               smri_vol_cdk_lobfrrh + smri_vol_cdk_lingualrh + 
+               smri_vol_cdk_mobfrrh + smri_vol_cdk_mdtmrh + 
+               smri_vol_cdk_parahpalrh + smri_vol_cdk_paracnrh + 
+               smri_vol_cdk_parsopcrh + smri_vol_cdk_parsobisrh + 
+               smri_vol_cdk_parstgrisrh + smri_vol_cdk_periccrh + 
+               smri_vol_cdk_postcnrh + smri_vol_cdk_ptcaterh + 
+               smri_vol_cdk_precnrh + smri_vol_cdk_pcrh + 
+               smri_vol_cdk_rracaterh + smri_vol_cdk_rrmdfrrh + 
+               smri_vol_cdk_sufrrh + smri_vol_cdk_suplrh + 
+               smri_vol_cdk_sutmrh + smri_vol_cdk_smrh + 
+               smri_vol_cdk_frpolerh + smri_vol_cdk_tmpolerh + 
+               smri_vol_cdk_trvtmrh + smri_vol_cdk_insularh,
+               data = latent_mri_train_data)
+
+# Output model summary
+summary(lm_model)
+
+```
+
+## Demo + latent
+```{r}
+lm_model <- lm(cbcl_scr_syn_internal_t ~ demo_brthdat_v2 + demo_sex_v2 + race_ethnicity + 
+               latent_factor_ss_general_ses + latent_factor_ss_social + 
+               latent_factor_ss_perinatal, data = latent_demo_train_data)
+
+# Output model summary
+summary(lm_model)
+```
+
+## MRI + demo + latent
+```{r}
+lm_model <- lm(cbcl_scr_syn_internal_t ~ demo_brthdat_v2 + demo_sex_v2 + race_ethnicity + 
+               latent_factor_ss_general_ses + latent_factor_ss_social + 
+               latent_factor_ss_perinatal +
+               smri_vol_cdk_banksstslh + smri_vol_cdk_cdacatelh + 
+               smri_vol_cdk_cdmdfrlh + smri_vol_cdk_cuneuslh + 
+               smri_vol_cdk_ehinallh + smri_vol_cdk_fusiformlh + 
+               smri_vol_cdk_ifpllh + smri_vol_cdk_iftmlh + 
+               smri_vol_cdk_ihcatelh + smri_vol_cdk_locclh + 
+               smri_vol_cdk_lobfrlh + smri_vol_cdk_linguallh + 
+               smri_vol_cdk_mobfrlh + smri_vol_cdk_mdtmlh + 
+               smri_vol_cdk_parahpallh + smri_vol_cdk_paracnlh + 
+               smri_vol_cdk_parsopclh + smri_vol_cdk_parsobislh + 
+               smri_vol_cdk_parstgrislh + smri_vol_cdk_pericclh + 
+               smri_vol_cdk_postcnlh + smri_vol_cdk_ptcatelh + 
+               smri_vol_cdk_precnlh + smri_vol_cdk_pclh + 
+               smri_vol_cdk_rracatelh + smri_vol_cdk_rrmdfrlh + 
+               smri_vol_cdk_sufrlh + smri_vol_cdk_supllh + 
+               smri_vol_cdk_sutmlh + smri_vol_cdk_smlh + 
+               smri_vol_cdk_frpolelh + smri_vol_cdk_tmpolelh + 
+               smri_vol_cdk_trvtmlh + smri_vol_cdk_insulalh + 
+               smri_vol_cdk_banksstsrh + smri_vol_cdk_cdacaterh + 
+               smri_vol_cdk_cdmdfrrh + smri_vol_cdk_cuneusrh + 
+               smri_vol_cdk_ehinalrh + smri_vol_cdk_fusiformrh + 
+               smri_vol_cdk_ifplrh + smri_vol_cdk_iftmrh + 
+               smri_vol_cdk_ihcaterh + smri_vol_cdk_loccrh + 
+               smri_vol_cdk_lobfrrh + smri_vol_cdk_lingualrh + 
+               smri_vol_cdk_mobfrrh + smri_vol_cdk_mdtmrh + 
+               smri_vol_cdk_parahpalrh + smri_vol_cdk_paracnrh + 
+               smri_vol_cdk_parsopcrh + smri_vol_cdk_parsobisrh + 
+               smri_vol_cdk_parstgrisrh + smri_vol_cdk_periccrh + 
+               smri_vol_cdk_postcnrh + smri_vol_cdk_ptcaterh + 
+               smri_vol_cdk_precnrh + smri_vol_cdk_pcrh + 
+               smri_vol_cdk_rracaterh + smri_vol_cdk_rrmdfrrh + 
+               smri_vol_cdk_sufrrh + smri_vol_cdk_suplrh + 
+               smri_vol_cdk_sutmrh + smri_vol_cdk_smrh + 
+               smri_vol_cdk_frpolerh + smri_vol_cdk_tmpolerh + 
+               smri_vol_cdk_trvtmrh + smri_vol_cdk_insularh,
+               data = latent_demo_mri_train_data)
+
+# Output model summary
+summary(lm_model)
+```
+
+```{r}
+
+```
+
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+
+
+

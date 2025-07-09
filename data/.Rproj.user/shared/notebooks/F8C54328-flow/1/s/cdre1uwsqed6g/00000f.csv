@@ -1,0 +1,4 @@
+"0","full_dat <- inner_join(full_dat, medication, by = ""src_subject_id"")"
+"0",""
+"0","# Remove rows from full_dat where participants are using antipsychotics or antidepressants"
+"0","full_dat <- full_dat[!(full_dat$uses_antipsychotic == TRUE | full_dat$uses_antidepressant == TRUE), ]"

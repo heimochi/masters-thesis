@@ -1,0 +1,8 @@
+"0","demo <- read.csv(""/Users/maggieheimvik/Desktop/GitHub/masters_thesis//Data/core/abcd-general/abcd_p_demo.csv"") %>%"
+"0","  filter(eventname == ""baseline_year_1_arm_1"") %>%"
+"0","  select(src_subject_id, demo_sex_v2, demo_gender_id_v2, race_ethnicity, demo_brthdat_v2)"
+"0",""
+"0",""
+"0","#merge based on subid list"
+"0","demo <- demo[demo$src_subject_id %in% subids$src_subject_id, ]"
+"0",""

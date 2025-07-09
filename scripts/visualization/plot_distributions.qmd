@@ -1,0 +1,316 @@
+---
+title: "Plot distributions"
+author: "MochiBear.Hei"
+date: "04.06.2025"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Data manipulation
+library(dplyr)
+library(tidyr)
+
+#models
+library(caret)
+library(xgboost)
+
+# Plotting
+library(ggplot2)
+library(viridis)      
+
+# Utilities
+library(knitr)
+
+
+```
+
+# Load
+## ID list
+```{r}
+##list of people to include in analysis subids.csv
+subids <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/subids.csv") 
+```
+
+## MRI
+```{r}
+mri <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/mri.csv") %>%
+  select (-smri_vol_scs_lesionlh, -smri_vol_scs_lesionrh, -smri_vol_scs_intracranialv) #removed these columns because they have 4897 NA each; should i remove , mrisdp_604 total cortical volume?
+
+
+full_dat <- mri[mri$src_subject_id %in% subids$src_subject_id, ]
+```
+
+## BPM
+```{r}
+bpm <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_y_bpm.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id, bpm_y_scr_internal_t) %>%
+  distinct(src_subject_id, .keep_all = TRUE)  #remove duplicates
+
+
+# merge
+full_dat <- inner_join(full_dat, bpm, by = "src_subject_id")
+```
+## CBCL
+```{r}
+cbcl <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/mental-health/mh_p_cbcl.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id, cbcl_scr_syn_internal_t) %>%
+  distinct(src_subject_id, .keep_all = TRUE) 
+
+
+# merge
+full_dat <- inner_join(full_dat, cbcl, by = "src_subject_id")
+```
+
+# Handle NA
+```{r}
+na_counts <- colSums(is.na(full_dat))
+na_counts[na_counts > 0]  # print only columns with NA values
+
+
+# mean imputation: 
+full_dat <- full_dat %>%
+  mutate(across(c(mrisdp_508, mrisdp_527, mrisdp_567, mrisdp_582, mrisdp_601, mrisdp_602, mrisdp_603, mrisdp_604),
+                ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
+
+```
+
+#plot train vs test sample
+Split data
+```{r}
+set.seed(123)  
+
+# Split the data into training and test sets (70/30)
+n <- nrow(full_dat)
+train_indices <- sample(1:n, size = round(0.7 * n))
+
+train_data <- full_dat[train_indices, ]  #4559 of 200
+test_data <- full_dat[-train_indices, ] #1954 of 200
+```
+
+
+#Distribution train vs test
+```{r}
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(stringr)
+
+# Add 'set' column to each
+train_data <- train_data %>% mutate(set = "Train")
+test_data  <- test_data  %>% mutate(set = "Test")
+
+# Combine
+combined_data <- bind_rows(train_data, test_data)
+
+# Reshape to long format
+long_split <- combined_data %>%
+  select(set, cbcl_scr_syn_internal_t, bpm_y_scr_internal_t) %>%
+  pivot_longer(cols = -set, names_to = "variable", values_to = "value") %>%
+  mutate(variable = recode(variable,
+                           "cbcl_scr_syn_internal_t" = "Parent-Reported",
+                           "bpm_y_scr_internal_t"    = "Youth-Reported"
+  ))
+
+# Function to calculate density and get max y-value
+calculate_density_and_max <- function(data) {
+  dens <- density(data$value, na.rm = TRUE)
+  return(max(dens$y))
+}
+
+# Calculate global max density across all variable + set combinations
+max_density <- long_split %>%
+  group_by(variable, set) %>%
+  summarise(max_density = calculate_density_and_max(cur_data()), .groups = "drop") %>%
+  summarise(global_max = max(max_density)) %>%
+  pull(global_max)
+
+# Final Plot
+ggplot(long_split, aes(x = value, fill = set)) +
+  geom_histogram(aes(y = ..density..), bins = 30, color = "black", alpha = 0.3, position = "identity") +
+  geom_density(alpha = 0.4, size = 1) +
+  facet_wrap(~ variable, scales = "fixed") +
+  scale_fill_manual(values = c("Train" = "#377eb8", "Test" = "#e41a1c")) +
+  coord_cartesian(xlim = c(-2, 5), ylim = c(0, max_density)) +
+  labs(title = "Train vs Test Distributions of Outcome Variables",
+       x = "Standardized Scores",
+       y = "Density",
+       fill = "Dataset") +
+  theme_classic(base_size = 18) +
+  theme(
+    legend.position = "top",
+    strip.text = element_text(face = "bold", size = 11),
+    strip.background = element_blank(),  # <<-- removes grey boxes
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+
+
+
+```
+
+#plot all together
+```{r}
+
+# Reshape data to long format
+long_dat <- full_dat %>%
+  select( bpm_y_scr_internal_t, cbcl_scr_syn_internal_t) %>%
+  pivot_longer(cols = everything(), names_to = "variable", values_to = "value") %>%
+  mutate(variable = recode(variable,
+    "bpm_y_scr_internal_t"    = "Youth-Reported",
+    "cbcl_scr_syn_internal_t" = "Parent-Reported"
+  ))
+
+# Function to calculate density and get max y-value
+calculate_density_and_max <- function(data) {
+  dens <- density(data$value, na.rm = TRUE)
+  return(max(dens$y))
+}
+
+# Calculate global max density for fixed y-axis
+max_density <- long_dat %>%
+  group_by(variable) %>%
+  summarise(max_density = calculate_density_and_max(cur_data())) %>%
+  summarise(global_max = max(max_density)) %>%
+  pull(global_max)
+
+p <- ggplot(long_dat, aes(x = value, fill = variable)) +
+  geom_histogram(aes(y = ..density..), bins = 30, color = "black", alpha = 0.3) +
+  geom_density(alpha = 0.6) +
+  facet_wrap(~ variable, scales = "fixed") +
+  labs(
+    title = "Distribution of Internalizing Symptom Scores",
+    x = "T-Score",
+    y = "Density"
+  ) +
+  scale_fill_manual(values = c("#2E8B57", "#800080")) +
+  theme_classic(base_size = 14) +
+  theme(
+    legend.position = "none",
+    strip.text = element_text(face = "bold")
+  )
+p
+ggsave("t_score_distribution.pdf", plot = p, width = 8, height = 5)
+
+
+```
+
+
+#evaluation RMSE distribution
+```{r}
+# Calculate descriptive statistics: mean, SD, min, max
+full_dat %>%
+  select(bpm_y_scr_internal_t, cbcl_scr_syn_internal_t) %>%
+  summarise(
+    Mean_BPM = mean(bpm_y_scr_internal_t, na.rm = TRUE),
+    SD_BPM   = sd(bpm_y_scr_internal_t, na.rm = TRUE),
+    Min_BPM  = min(bpm_y_scr_internal_t, na.rm = TRUE),
+    Max_BPM  = max(bpm_y_scr_internal_t, na.rm = TRUE),
+    
+    Mean_CBCL = mean(cbcl_scr_syn_internal_t, na.rm = TRUE),
+    SD_CBCL   = sd(cbcl_scr_syn_internal_t, na.rm = TRUE),
+    Min_CBCL  = min(cbcl_scr_syn_internal_t, na.rm = TRUE),
+    Max_CBCL  = max(cbcl_scr_syn_internal_t, na.rm = TRUE)
+  )
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```

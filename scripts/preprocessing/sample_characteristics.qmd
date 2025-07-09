@@ -1,0 +1,647 @@
+---
+title: "Demographic characteristics"
+author: "MochiBear.Hei"
+date: "12.20.2024"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Data manipulation
+library(dplyr)
+library(tidyr)
+
+# Plotting
+library(ggplot2)
+
+# Utilities
+library(knitr)
+
+library(gt)
+```
+
+
+# Cleaning
+## Diagnosis and ksads demo
+```{r}
+diagnosis <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/OCD/diagnosis.csv")
+
+# Select only the specified columns
+diagnosis <- diagnosis %>%
+  select(src_subject_id, 
+         ksads_11_917_p) #present diagnosis OCD F42
+
+demo <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/demo.csv")
+
+# Merge
+## Demographic variables: sex, gender, ethnicity, age + diagnosis
+demo <- diagnosis %>%
+  left_join(demo, by = "src_subject_id")
+
+```
+
+```{r}
+demo_2 <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/abcd-general/abcd_p_demo.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  mutate(
+    demo_comb_income_v2_l = if_else(demo_comb_income_v2_l %in% c(777, 999), NA_real_, demo_comb_income_v2_l),
+    demo_prnt_marital_v2_l = if_else(demo_prnt_marital_v2_l %in% c(777, 999), NA_real_, demo_prnt_marital_v2_l),
+    demo_prtnr_ed_v2_2yr_l = if_else(demo_prtnr_ed_v2_2yr_l %in% c(777, 999), NA_real_, demo_prtnr_ed_v2_2yr_l)
+  )
+
+# Select only the specified columns
+demo_2 <- demo_2 %>%
+  select(src_subject_id, 
+         demo_prnt_marital_v2_l, # Marital status of other parent
+         demo_prnt_ed_v2_2yr_l, # Parental education level
+         demo_prtnr_ed_v2_2yr_l, # Other parent education level 
+         demo_comb_income_v2_l # Other parent income level
+         ) 
+#Merge
+demo <- demo_2 %>%
+  left_join(demo, by = "src_subject_id")%>%
+  filter(!is.na(ksads_11_917_p))
+```
+
+```{r}
+#how many in the full sample?
+# Calculate the total number of unique src_subject_id
+total_unique_subjects <- demo %>%
+  summarise(total_unique_subjects = n_distinct(src_subject_id)) %>%
+  pull(total_unique_subjects)
+
+# Display the result
+cat("Total number of unique src_subject_id:", total_unique_subjects, "\n")
+
+
+## how many with no ocd
+# Calculate the total number of people with OCD absent
+total_ocd_absent <- demo %>%
+  filter(ksads_11_917_p != 1) %>% # Filter for cases where OCD is absent
+  summarise(total_ocd_absent = n_distinct(src_subject_id)) %>%
+  pull(total_ocd_absent)
+# Display the result
+cat("Total number of people with OCD absent:", total_ocd_absent, "\n")
+
+## how many with ocd
+# Calculate the total number of people with OCD absent
+total_ocd_present <- demo %>%
+  filter(ksads_11_917_p == 1) %>% # Filter for cases where OCD is absent
+  summarise(total_ocd_present = n_distinct(src_subject_id)) %>%
+  pull(total_ocd_present)
+# Display the result
+cat("Total number of people with OCD present:", total_ocd_present, "\n")
+```
+
+Formatting variables
+```{r}
+str(demo)
+
+# Convert variables to factor with meaningful labels
+demo <- demo %>%
+  mutate(
+    demo_prnt_marital_v2_l = factor(demo_prnt_marital_v2_l, levels = c(1, 2, 3, 4, 5, 6, 777),
+                                    labels = c("Married", "Widowed", "Divorced", "Separated", "Never married", "Living with partner", "Refused to answer")),
+    
+    demo_prnt_ed_v2_2yr_l = factor(demo_prnt_ed_v2_2yr_l, levels = c(0:14, 16:23, 777, 999),
+                                    labels = c("Never attended/Kindergarten only", "1st grade", "2nd grade", 
+                                               "3rd grade", "4th grade", "5th grade", "6th grade", 
+                                               "7th grade", "8th grade", "9th grade", "10th grade", 
+                                               "11th grade", "12th grade, no diploma", 
+                                               "High school graduate", "GED or equivalent", 
+                                               "Less than 1 year of college credit/post-secondary education", 
+                                               "One year or more of college credit, no degree",
+                                               "Associate degree: Occupational, Technical, or Vocational", 
+                                               "Associate degree: Academic Program", 
+                                               "Bachelor's degree", "Master's degree",
+                                               "Professional School degree", "Doctoral degree", 
+                                               "Refused to answer", "Don't Know")),
+    
+    demo_prtnr_ed_v2_2yr_l = factor(demo_prtnr_ed_v2_2yr_l, levels = c(0:14, 16:23, 777, 999),
+                                    labels = c("Never attended/Kindergarten only", "1st grade", "2nd grade", 
+                                               "3rd grade", "4th grade", "5th grade", "6th grade", 
+                                               "7th grade", "8th grade", "9th grade", "10th grade", 
+                                               "11th grade", "12th grade, no diploma", 
+                                               "High school graduate", "GED or equivalent", 
+                                               "Associate degree: Occupational, Technical, or Vocational",
+                                               "Associate degree: Academic Program", 
+                                               "Bachelor's degree", "Master's degree",
+                                               "Professional School degree", "Doctoral degree", 
+                                               "Less than 1 year of college credit/post-secondary education", 
+                                               "One year or more of college credit, no degree",
+                                               "Refused to answer", "Don't Know")),
+    
+    demo_comb_income_v2 = factor(demo_comb_income_v2_l),
+    ksads_11_917_p = as.factor(ksads_11_917_p),  
+    demo_sex_v2 = as.factor(demo_sex_v2),      
+    demo_gender_id_v2 = as.factor(demo_gender_id_v2),  
+    race_ethnicity = as.factor(race_ethnicity),  
+    demo_brthdat_v2 = as.integer(demo_brthdat_v2) 
+  )
+
+# Check
+str(demo)
+
+```
+
+## Counts and percents
+```{r}
+# Define the given totals
+total_full_sample <- 10711
+total_ocd_absent <- 10049
+total_ocd_present <- 662
+
+# Identify the OCD presence
+demo <- demo %>%
+  mutate(has_ocd = if_else(ksads_11_917_p == 1, "OCD", "No OCD"))
+
+# Function to categorize and summarize demographic data
+summarize_demographics <- function(data, demographic_var) {
+  data %>%
+    group_by(.data[[demographic_var]], has_ocd) %>%
+    summarise(count = n(), .groups = "drop") %>%
+    mutate(
+      total = case_when(
+        has_ocd == "OCD" ~ total_ocd_present,
+        has_ocd == "No OCD" ~ total_ocd_absent,
+        TRUE ~ total_full_sample
+      ),
+      percentage = (count / total) * 100
+    )
+}
+
+# List of demographic variables to summarize
+demographic_vars <- c("demo_prnt_marital_v2_l", "demo_prnt_ed_v2_2yr_l", 
+                      "demo_prtnr_ed_v2_2yr_l", "demo_comb_income_v2",
+                      "demo_sex_v2", "demo_gender_id_v2", "race_ethnicity",
+                      "demo_brthdat_v2")
+
+# Create a summary for each demographic variable
+demographic_summaries <- lapply(demographic_vars, function(var) {
+  summarize_demographics(demo, var)
+})
+
+# Print the summarized data
+names(demographic_summaries) <- demographic_vars
+lapply(seq_along(demographic_vars), function(i) {
+  cat("\nSummary for", demographic_vars[i], ":\n")
+  print(demographic_summaries[[i]])
+})
+```
+
+## Mean and SD
+```{r}
+
+# Full sample statistics for numeric demographic variables
+full_sample_stats <- demo %>%
+  summarise(
+    mean_age = mean(demo_brthdat_v2, na.rm = TRUE),
+    sd_age = sd(demo_brthdat_v2, na.rm = TRUE),
+    mean_income = mean(demo_comb_income_v2_l, na.rm = TRUE),
+    sd_income = sd(demo_comb_income_v2_l, na.rm = TRUE),
+    mean_prnt_ed = mean(as.numeric(demo_prnt_ed_v2_2yr_l), na.rm = TRUE),
+    sd_prnt_ed = sd(as.numeric(demo_prnt_ed_v2_2yr_l), na.rm = TRUE),
+    mean_prtnr_ed = mean(as.numeric(demo_prtnr_ed_v2_2yr_l), na.rm = TRUE),
+    sd_prtnr_ed = sd(as.numeric(demo_prtnr_ed_v2_2yr_l), na.rm = TRUE)
+  )
+
+# OCD present statistics for numeric demographic variables
+ocd_present_stats <- demo %>%
+  filter(ksads_11_917_p == 1) %>%
+  summarise(
+    mean_age = mean(demo_brthdat_v2, na.rm = TRUE),
+    sd_age = sd(demo_brthdat_v2, na.rm = TRUE),
+    mean_income = mean(demo_comb_income_v2_l, na.rm = TRUE),
+    sd_income = sd(demo_comb_income_v2_l, na.rm = TRUE),
+    mean_prnt_ed = mean(as.numeric(demo_prnt_ed_v2_2yr_l), na.rm = TRUE),
+    sd_prnt_ed = sd(as.numeric(demo_prnt_ed_v2_2yr_l), na.rm = TRUE),
+    mean_prtnr_ed = mean(as.numeric(demo_prtnr_ed_v2_2yr_l), na.rm = TRUE),
+    sd_prtnr_ed = sd(as.numeric(demo_prtnr_ed_v2_2yr_l), na.rm = TRUE)
+  )
+
+# OCD absent statistics for numeric demographic variables
+ocd_absent_stats <- demo %>%
+  filter(ksads_11_917_p == 0) %>%
+  summarise(
+    mean_age = mean(demo_brthdat_v2, na.rm = TRUE),
+    sd_age = sd(demo_brthdat_v2, na.rm = TRUE),
+    mean_income = mean(demo_comb_income_v2_l, na.rm = TRUE),
+    sd_income = sd(demo_comb_income_v2_l, na.rm = TRUE),
+    mean_prnt_ed = mean(as.numeric(demo_prnt_ed_v2_2yr_l), na.rm = TRUE),
+    sd_prnt_ed = sd(as.numeric(demo_prnt_ed_v2_2yr_l), na.rm = TRUE),
+    mean_prtnr_ed = mean(as.numeric(demo_prtnr_ed_v2_2yr_l), na.rm = TRUE),
+    sd_prtnr_ed = sd(as.numeric(demo_prtnr_ed_v2_2yr_l), na.rm = TRUE)
+  )
+
+# Print summaries
+cat("Full Sample Statistics\n")
+print(full_sample_stats)
+
+cat("\nOCD Present Statistics\n")
+print(ocd_present_stats)
+
+cat("\nOCD Absent Statistics\n")
+print(ocd_absent_stats)
+
+```
+
+
+## Cognition
+```{r}
+cogn <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/neurocognition/nc_y_nihtb.csv")
+
+# Select only the specified columns
+cogn <- cogn %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id, 
+         nihtbx_totalcomp_fc #NIH toolbox - cognition total
+         ) 
+```
+
+## Pubertal status
+Petersen, A. C., Crockett, L., et al. (1988) A self-report measure of pubertal status: Reliability, validity, and initial norms. J Youth Adolesc 17(2): 117-133.
+
+puber <- puber %>%
+  mutate(
+    pds_p_ss_female_category = factor(pds_p_ss_female_category, levels = c(1, 2, 3, 4, 5),
+                                    labels = c("Prepuberty", "Early Puberty", "Mid Puberty", "Late Puberty", "Post puberty"))
+  )
+
+```{r}
+puber <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/physical-health/ph_p_pds.csv")
+
+# Select only the specified columns
+puber <- puber %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id, 
+         pds_p_ss_female_category, # Pubertal status female
+         pds_p_ss_female_category_2, #based on sex at birth
+         pds_p_ss_male_category, # Pubertal status male
+         pds_p_ss_male_category_2 #based on sex at birth
+         ) 
+
+diagnosis <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/OCD/diagnosis.csv")
+
+# Select only the specified columns
+diagnosis <- diagnosis %>%
+  select(src_subject_id, 
+         ksads_11_917_p) #present diagnosis OCD F42
+
+# Merge the puberty and diagnosis data on src_subject_id
+puber <- puber %>%
+  left_join(diagnosis, by = "src_subject_id") 
+
+#how many in the full sample?
+# Calculate the total number of unique src_subject_id
+total_unique_subjects <- puber %>%
+  summarise(total_unique_subjects = n_distinct(src_subject_id)) %>%
+  pull(total_unique_subjects)
+
+# Display the result
+cat("Total number of unique src_subject_id:", total_unique_subjects, "\n")
+
+
+## how many with no ocd
+# Calculate the total number of people with OCD absent
+total_ocd_absent <- puber %>%
+  filter(ksads_11_917_p != 1) %>% # Filter for cases where OCD is absent
+  summarise(total_ocd_absent = n_distinct(src_subject_id)) %>%
+  pull(total_ocd_absent)
+# Display the result
+cat("Total number of people with OCD absent:", total_ocd_absent, "\n")
+
+## how many with ocd
+# Calculate the total number of people with OCD absent
+total_ocd_present <- puber %>%
+  filter(ksads_11_917_p == 1) %>% # Filter for cases where OCD is absent
+  summarise(total_ocd_present = n_distinct(src_subject_id)) %>%
+  pull(total_ocd_present)
+# Display the result
+cat("Total number of people with OCD present:", total_ocd_present, "\n")
+```
+
+
+```{r}
+# Define the given totals
+total_full_sample <- 10973
+total_ocd_absent <- 10068
+total_ocd_present <- 662
+
+# Full sample statistics for puberty variables
+full_sample_stats_pds <- puber %>%
+  summarise(
+    mean_female_cat = mean(pds_p_ss_female_category, na.rm = TRUE),
+    sd_female_cat = sd(pds_p_ss_female_category, na.rm = TRUE),
+    mean_female_cat_2 = mean(pds_p_ss_female_category_2, na.rm = TRUE),
+    sd_female_cat_2 = sd(pds_p_ss_female_category_2, na.rm = TRUE),
+    mean_male_cat = mean(pds_p_ss_male_category, na.rm = TRUE),
+    sd_male_cat = sd(pds_p_ss_male_category, na.rm = TRUE),
+    mean_male_cat_2 = mean(pds_p_ss_male_category_2, na.rm = TRUE),
+    sd_male_cat_2 = sd(pds_p_ss_male_category_2, na.rm = TRUE)
+  )
+
+# OCD present statistics for puberty variables
+ocd_present_stats_pds <- puber %>%
+  filter(ksads_11_917_p == 1) %>%
+  summarise(
+    mean_female_cat = mean(pds_p_ss_female_category, na.rm = TRUE),
+    sd_female_cat = sd(pds_p_ss_female_category, na.rm = TRUE),
+    mean_female_cat_2 = mean(pds_p_ss_female_category_2, na.rm = TRUE),
+    sd_female_cat_2 = sd(pds_p_ss_female_category_2, na.rm = TRUE),
+    mean_male_cat = mean(pds_p_ss_male_category, na.rm = TRUE),
+    sd_male_cat = sd(pds_p_ss_male_category, na.rm = TRUE),
+    mean_male_cat_2 = mean(pds_p_ss_male_category_2, na.rm = TRUE),
+    sd_male_cat_2 = sd(pds_p_ss_male_category_2, na.rm = TRUE)
+  )
+
+# OCD absent statistics for puberty variables
+ocd_absent_stats_pds <- puber %>%
+  filter(ksads_11_917_p == 0) %>%
+  summarise(
+    mean_female_cat = mean(pds_p_ss_female_category, na.rm = TRUE),
+    sd_female_cat = sd(pds_p_ss_female_category, na.rm = TRUE),
+    mean_female_cat_2 = mean(pds_p_ss_female_category_2, na.rm = TRUE),
+    sd_female_cat_2 = sd(pds_p_ss_female_category_2, na.rm = TRUE),
+    mean_male_cat = mean(pds_p_ss_male_category, na.rm = TRUE),
+    sd_male_cat = sd(pds_p_ss_male_category, na.rm = TRUE),
+    mean_male_cat_2 = mean(pds_p_ss_male_category_2, na.rm = TRUE),
+    sd_male_cat_2 = sd(pds_p_ss_male_category_2, na.rm = TRUE)
+  )
+
+# Print summaries
+cat("Full Sample Stats for Puberty Variables\n")
+print(full_sample_stats_pds)
+
+cat("\nOCD Present Stats for Puberty Variables\n")
+print(ocd_present_stats_pds)
+
+cat("\nOCD Absent Stats for Puberty Variables\n")
+print(ocd_absent_stats_pds)
+
+```
+
+## Grades
+```{r}
+grades <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/culture-environment/ce_p_sag.csv")
+
+#Keep the relevant time points
+grades <- grades %>%
+  filter(eventname == "2_year_follow_up_y_arm_1")
+
+# Select only the specified columns
+grades <- grades %>%
+  select(sag_grade_type)
+```
+
+## SES variables
+o	SES can be reported using variables like parental education level, household income, or an SES index if available.
+
+```{r}
+latent <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/abcd-general/abcd_y_lf.csv")
+
+
+diagnosis <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/OCD/diagnosis.csv")
+
+# Select only the specified columns
+diagnosis <- diagnosis %>%
+  select(src_subject_id, 
+         ksads_11_917_p) #present diagnosis OCD F42
+
+# Merge the SES variables and diagnosis data on src_subject_id
+latent <- latent %>%
+  left_join(diagnosis, by = "src_subject_id")  %>%
+  select(-eventname)
+
+
+# Full sample statistics for latent variables
+full_sample_stats_latent <- latent %>%
+  summarise(
+    mean_general_ses = mean(latent_factor_ss_general_ses, na.rm = TRUE),
+    sd_general_ses = sd(latent_factor_ss_general_ses, na.rm = TRUE),
+    mean_social = mean(latent_factor_ss_social, na.rm = TRUE),
+    sd_social = sd(latent_factor_ss_social, na.rm = TRUE),
+    mean_perinatal = mean(latent_factor_ss_perinatal, na.rm = TRUE),
+    sd_perinatal = sd(latent_factor_ss_perinatal, na.rm = TRUE)
+  )
+
+# OCD present statistics for latent variables
+ocd_present_stats_latent <- latent %>%
+  filter(ksads_11_917_p == 1) %>%
+  summarise(
+    mean_general_ses = mean(latent_factor_ss_general_ses, na.rm = TRUE),
+    sd_general_ses = sd(latent_factor_ss_general_ses, na.rm = TRUE),
+    mean_social = mean(latent_factor_ss_social, na.rm = TRUE),
+    sd_social = sd(latent_factor_ss_social, na.rm = TRUE),
+    mean_perinatal = mean(latent_factor_ss_perinatal, na.rm = TRUE),
+    sd_perinatal = sd(latent_factor_ss_perinatal, na.rm = TRUE)
+  )
+
+# OCD absent statistics for latent variables
+ocd_absent_stats_latent <- latent %>%
+  filter(ksads_11_917_p == 0) %>%
+  summarise(
+    mean_general_ses = mean(latent_factor_ss_general_ses, na.rm = TRUE),
+    sd_general_ses = sd(latent_factor_ss_general_ses, na.rm = TRUE),
+    mean_social = mean(latent_factor_ss_social, na.rm = TRUE),
+    sd_social = sd(latent_factor_ss_social, na.rm = TRUE),
+    mean_perinatal = mean(latent_factor_ss_perinatal, na.rm = TRUE),
+    sd_perinatal = sd(latent_factor_ss_perinatal, na.rm = TRUE)
+  )
+
+# Print summaries
+cat("Full Sample Stats for Latent Variables\n")
+print(full_sample_stats_latent)
+
+cat("\nOCD Present Stats for Latent Variables\n")
+print(ocd_present_stats_latent)
+
+cat("\nOCD Absent Stats for Latent Variables\n")
+print(ocd_absent_stats_latent)
+```
+
+##	Family and Household Structure:
+o	Include information on the family structure (e.g., single-parent households, guardianship) and household size if relevant.
+
+Family environment scale
+fes_p_ss_fc_pr = conflict
+fes_p_ss_cohesion_sum_pr = cohesion
+```{r}
+fam_envi <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/culture-environment/ce_p_fes.csv")
+```
+
+## Useable MRI
+```{r}
+# DESKIAN ATLAS: MRI year 2 follow up
+desikan_v <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/desikan_v.csv")
+
+# Create the usableMRI variable
+desikan_v <- desikan_v %>%
+  group_by(src_subject_id) %>%
+  mutate(usableMRI = if_else(all(!is.na(.)), 1, 0)) %>%
+  ungroup()
+
+# Select and save only src_subject_id and usableMRI
+usable_mri <- desikan_v %>%
+  select(src_subject_id, usableMRI)
+```
+
+```{r}
+full_data <- demo %>%
+  left_join(usable_mri, by = c("src_subject_id")) 
+```
+
+```{r}
+# Full sample count of usable MRIs
+full_sample_usable_mri <- full_data %>%
+  filter(usableMRI == 1) %>%  # Only consider those with usable MRI
+  summarise(total_usable_mri = n_distinct(src_subject_id)) %>%
+  pull(total_usable_mri)
+
+cat("Total number of subjects with usable MRI in the full sample:", full_sample_usable_mri, "\n")
+
+# OCD absent sample count of usable MRIs
+ocd_absent_usable_mri <- full_data %>%
+  filter(ksads_11_917_p != 1, usableMRI == 1) %>%  # OCD absent and usable MRI
+  summarise(total_usable_mri = n_distinct(src_subject_id)) %>%
+  pull(total_usable_mri)
+
+cat("Total number of subjects with usable MRI and OCD absent:", ocd_absent_usable_mri, "\n")
+
+# OCD present sample count of usable MRIs
+ocd_present_usable_mri <- full_data %>%
+  filter(ksads_11_917_p == 1, usableMRI == 1) %>%  # OCD present and usable MRI
+  summarise(total_usable_mri = n_distinct(src_subject_id)) %>%
+  pull(total_usable_mri)
+
+cat("Total number of subjects with usable MRI and OCD present:", ocd_present_usable_mri, "\n")
+```
+
+# Merge
+## Demographic variables: sex, gender, ethnicity, age 
+```{r}
+full_data <- diagnosis %>%
+  left_join(demo, by = "src_subject_id")
+```
+
+### Latent variables
+1) a general latent factor of economic, social, and physiological well-being, 
+2) a latent factor for youth perceived social support, and 
+3) a latent factor for perinatal health.
+```{r}
+latent <- latent %>%
+  select(-eventname)
+
+full_data <- full_data %>%
+  left_join(latent, by = c("src_subject_id")) 
+```
+
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+
+
+
+
+

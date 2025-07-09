@@ -1,0 +1,32 @@
+"0","# --- Load bpm Internalizing T-Scores ---"
+"0","bpm <- read_csv(""/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_y_bpm.csv"") %>%"
+"0","  filter(eventname == ""2_year_follow_up_y_arm_1"") %>%"
+"0","  select(src_subject_id, bpm_y_scr_internal_t) %>%"
+"0","  distinct(src_subject_id, .keep_all = TRUE)"
+"2","[1mRows: [22m[34m78578[39m [1mColumns: [22m[34m50[39m"
+"2","[36m──[39m [1mColumn specification[22m [36m──────────────────────────────────────────────────────────────────────[39m
+[1mDelimiter:[22m "",""
+[31mchr[39m  (2): src_subject_id, eventname
+[32mdbl[39m (48): bpm_1_y, bpm_2_y, bpm_3_y, bpm_4_y, bpm_5_y, bpm_6_y, bpm_7_y, bpm_8_y, bpm_9_y,..."
+"2","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message."
+"0","# Merge bpm into dataset"
+"0","full_dat <- inner_join(full_dat, bpm, by = ""src_subject_id"")"
+"0",""
+"0","# --- Load Demographics ---"
+"0","demo <- read_csv(""/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/demo.csv"") %>%"
+"0","  select(src_subject_id, demo_sex_v2, race_ethnicity, demo_brthdat_v2) %>%"
+"0","  mutate("
+"0","    demo_sex_v2 = as.factor(demo_sex_v2),"
+"0","    race_ethnicity = as.factor(race_ethnicity),"
+"0","    demo_brthdat_v2 = as.numeric(demo_brthdat_v2)"
+"0","  )"
+"2","[1mRows: [22m[34m11868[39m [1mColumns: [22m[34m5[39m"
+"2","[36m──[39m [1mColumn specification[22m [36m──────────────────────────────────────────────────────────────────────[39m
+[1mDelimiter:[22m "",""
+[31mchr[39m (4): src_subject_id, demo_sex_v2, demo_gender_id_v2, race_ethnicity
+[32mdbl[39m (1): demo_brthdat_v2"
+"2","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message."

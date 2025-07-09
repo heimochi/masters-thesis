@@ -1,0 +1,277 @@
+---
+title: "Comorbidities"
+author: "MochiBear.Hei"
+date: "12.20.2024"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Data manipulation
+library(dplyr)
+library(tidyr)
+
+# Plotting
+library(ggplot2)
+
+# Utilities
+library(knitr)
+
+library(gt)
+library(epitools)
+```
+
+# Comorbid Conditions
+This script finds relevant psychiatric diagnosis, groups them into disorders and checks how many people with/without OCD have any comorbidities, as well as identifies "healthy" group
+
+# KSADS
+```{r}
+all_ksads_diagnosis <- read.csv("/Users/maggieheimvik/Documents/LCBC/Data/ABCD/core/mental-health/mh_p_ksads_ss.csv")%>%
+  mutate(
+    across(
+      # Exclude specific columns from conversion
+      -c(src_subject_id, eventname, ksads_import_id_p, ksads_timestamp_p, ksads2_import_id_p,  ksads2_timestamp_p),
+      ~ if_else(as.numeric(.) %in% c(888, 555), NA_real_, as.numeric(.))
+    )
+  )
+
+#Keep the relevant time points
+all_ksads_diagnosis <- all_ksads_diagnosis %>%
+  filter(eventname == "2_year_follow_up_y_arm_1")   #Keep the relevant time points
+
+#only present or current diagnosis year 2
+all_ksads_diagnosis <- all_ksads_diagnosis %>%
+  select(
+    src_subject_id, 
+    ksads_11_917_p,  # Present diagnosis OCD F42
+    # ADHD
+    ksads_14_853_p,  #Attention-Deficit/Hyperactivity Disorder Present
+    ksads_14_856_p,  #Diagnosis - Unspecified Attention-Deficit/Hyperactivity Disorder (F90.9)
+    # Bipolar disorders
+    ksads_2_830_p,   # Bipolar I Disorder, current episode manic (F31.1x)
+    ksads_2_831_p,   # Bipolar I Disorder, current episode depressed, F31.3x
+    ksads_2_835_p,   # Bipolar II Disorder, currently hypomanic F31.81
+    ksads_2_832_p,   # Bipolar I Disorder, currently hypomanic F31.0
+    ksads_2_833_p,   # Bipolar I Disorder, most recent past episode manic (F31.1x)
+    ksads_2_834_p,   # Bipolar I Disorder, most recent past episode depressed (F31.1.3x)
+    ksads_2_836_p,   # Bipolar II Disorder, Currently Depressed F31.81
+    ksads_2_837_p,   # Bipolar II Disorder, most recent past hypomanic F31.81
+    ksads_2_838_p,   # Unspecified Bipolar and Related Disorder, current F31.9
+    # Conduct disorders / ODD
+    ksads_16_898_p,  # Conduct Disorder, present adolescent onset (F91.2)
+    ksads_16_897_p,  # Conduct Disorder, present childhood onset (F91.1)
+    ksads_15_901_p,  # Oppositional Defiant Disorder, Present F91.3
+    # Depressive disorders
+    ksads_1_843_p,   # Persistent Depressive Disorder (Dysthymia) F34.1
+    ksads_1_840_p,   # Major Depressive Disorder Present
+    ksads_1_846_p,   # Unspecified Depressive Disorder Current (F32.9)
+    ksads_3_848_p,   # Disruptive Mood Dysregulation Disorder (DMDD) Current (F34.8)
+    # Anxiety disorders
+    ksads_6_859_p,   # Agoraphobia (F40.00) PRESENT
+    ksads_10_869_p,  # Generalized Anxiety Disorder Present (F41.1)
+    ksads_5_857_p,   # Panic Disorder (F41.0) PRESENT
+    ksads_7_861_p,   # Separation Anxiety Disorder (F93.00) PRESENT
+    ksads_8_863_p,   # Social Anxiety Disorder (F40.10) PRESENT
+    # Drug use disorders
+    ksads_19_891_p,  # Alcohol Use Disorder Present
+    ksads_19_895_p,  # Unspecified Alcohol-Related Disorder, present (F10.99)
+    ksads_20_871_p,  # Cannabis Use Disorder Present
+    ksads_20_872_p,  # Stimulant Use Disorder Present: Amphetamine-type substance
+    ksads_20_873_p,  # Sedative, Hypnotic or Anxiolytic Use Disorder Present
+    ksads_20_874_p,  # Stimulant Use Disorder Present: Cocaine
+    ksads_20_875_p,  # Opioid Use Disorder Present
+    ksads_20_878_p,  # Inhalant Use Disorder Present
+    ksads_20_879_p,  # Other Drugs Use Disorder Present
+    ksads_20_889_p,  # Substance Use Disorder CURRENT
+    ksads_20_893_p,  # Unspecified Substance Related Disorder, Present (F10.99)
+    ksads_20_876_p,  # Hallucinogen Use Disorder Present
+    ksads_20_877_p,  # PCP Use Disorder Present
+    # Eating disorders
+    ksads_13_929_p,  # Anorexia Nervosa (F50.02) Binge eating/purging subtype
+    ksads_13_932_p,  # Anorexia Nervosa (F50.01) Restricting subtype, PRESENT
+    ksads_13_935_p,  # Bulimia Nervosa (F50.2) PRESENT
+    ksads_13_938_p,  # Binge-Eating Disorder (F50.8) CURRENT
+    # PTSD
+    ksads_21_921_p,  # Post-Traumatic Stress Disorder PRESENT (F43.10)
+    # Suicidality
+    ksads_23_945_p,  # Self Injurious Behavior without suicidal intent Present
+    ksads_23_946_p,  # Suicidal ideation Passive Present
+    ksads_23_947_p,  # Suicidal ideation Active non-specific Present
+    ksads_23_948_p,  # Suicidal ideation Active method Present
+    ksads_23_949_p,  # Suicidal ideation Active intent Present
+    ksads_23_950_p,  # Suicidal ideation Active plan Present
+    ksads_23_951_p,  # Preparatory Actions toward imminent Suicidal behavior Present
+    ksads_23_952_p,  # Interrupted Attempt Present
+    ksads_23_953_p,  # Aborted Attempt Present
+    ksads_23_954_p   # Suicide Attempt Present
+  ) #%>%
+#  # Filter out rows where all ksads columns are missing
+#  filter(rowSums(is.na(select(., starts_with("ksads")))) < length(select(., starts_with("ksads")))) %>%
+#  # Filter to retain subjects with OCD or no diagnosis at all
+#  filter(
+#    ksads_11_917_p == 1 |  # Retain if OCD is present
+#    rowSums(across(starts_with("ksads"), ~ replace_na(. == 1, 0))) == 0  # Retain if no diagnosis
+#  )
+```
+
+
+```{r}
+# Define no diagnosis and only OCD
+all_ksads_diagnosis <- all_ksads_diagnosis %>%
+  mutate(
+    no_diagnosis = rowSums(across(starts_with("ksads"), ~ replace_na(. == 1, 0))) == 0,
+    only_ocd = ksads_11_917_p == 1 & rowSums(across(starts_with("ksads"), ~ replace_na(. == 1, 0))) == 1
+  )
+
+# Summarise counts
+all_ksads_diagnosis %>%
+  summarise(
+    no_diagnosis_count = sum(no_diagnosis),
+    only_ocd_count = sum(only_ocd)
+  ) %>%
+  {cat("Number of subjects with no diagnosis:", .$no_diagnosis_count, "\n"); 
+   cat("Number of subjects with only OCD diagnosis:", .$only_ocd_count, "\n")}
+
+
+
+########################## grouping by disorder ########################
+# if NA it wil count as diagnosis absent
+all_ksads_diagnosis <- all_ksads_diagnosis %>%
+  mutate(
+    adhd = if_else(
+      replace_na(ksads_14_853_p, 0) == 1 | replace_na(ksads_14_856_p, 0) == 1, 
+      1, 
+      0
+    ),
+    any_bipolar = if_else(
+      replace_na(ksads_2_830_p == 1, 0) | replace_na(ksads_2_831_p == 1, 0) | replace_na(ksads_2_835_p == 1, 0) | 
+      replace_na(ksads_2_832_p == 1, 0) | replace_na(ksads_2_833_p == 1, 0) | replace_na(ksads_2_834_p == 1, 0) | 
+      replace_na(ksads_2_836_p == 1, 0) | replace_na(ksads_2_837_p == 1, 0) | replace_na(ksads_2_838_p == 1, 0), 
+      1, 
+      0
+    ),
+    any_conduct_odd = if_else(
+      replace_na(ksads_16_898_p == 1, 0) | replace_na(ksads_16_897_p == 1, 0) | replace_na(ksads_15_901_p == 1, 0), 
+      1, 
+      0
+    ),
+    any_depressive_disorder = if_else(
+      replace_na(ksads_1_843_p == 1, 0) | replace_na(ksads_1_840_p == 1, 0) | replace_na(ksads_1_846_p == 1, 0) | 
+      replace_na(ksads_3_848_p == 1, 0), 
+      1, 
+      0
+    ),
+    any_anxiety_disorder = if_else(
+      replace_na(ksads_6_859_p == 1, 0) | replace_na(ksads_10_869_p == 1, 0) | replace_na(ksads_5_857_p == 1, 0) | 
+      replace_na(ksads_7_861_p == 1, 0) | replace_na(ksads_8_863_p == 1, 0), 
+      1, 
+      0
+    ),
+    any_drug_use_disorder = if_else(
+      replace_na(ksads_19_891_p == 1, 0) | replace_na(ksads_19_895_p == 1, 0) | replace_na(ksads_20_871_p == 1, 0) | 
+      replace_na(ksads_20_872_p == 1, 0) | replace_na(ksads_20_873_p == 1, 0) | replace_na(ksads_20_874_p == 1, 0) | 
+      replace_na(ksads_20_875_p == 1, 0) | replace_na(ksads_20_878_p == 1, 0) | replace_na(ksads_20_879_p == 1, 0) | 
+      replace_na(ksads_20_889_p == 1, 0) | replace_na(ksads_20_893_p == 1, 0) | replace_na(ksads_20_876_p == 1, 0) | 
+      replace_na(ksads_20_877_p == 1, 0), 
+      1, 
+      0
+    ),
+    any_eating_disorder = if_else(
+      replace_na(ksads_13_929_p == 1, 0) | replace_na(ksads_13_932_p == 1, 0) | replace_na(ksads_13_935_p == 1, 0) | 
+      replace_na(ksads_13_938_p == 1, 0), 
+      1, 
+      0
+    ),
+    ptsd = if_else(replace_na(ksads_21_921_p, 0) == 1, 1, 0),
+    any_suicidality = if_else(
+      replace_na(ksads_23_945_p == 1, 0) | replace_na(ksads_23_946_p == 1, 0) | replace_na(ksads_23_947_p == 1, 0) | 
+      replace_na(ksads_23_948_p == 1, 0) | replace_na(ksads_23_949_p == 1, 0) | replace_na(ksads_23_950_p == 1, 0) | 
+      replace_na(ksads_23_951_p == 1, 0) | replace_na(ksads_23_952_p == 1, 0) | replace_na(ksads_23_953_p == 1, 0) | 
+      replace_na(ksads_23_954_p == 1, 0), 
+      1, 
+      0
+    )
+  ) 
+
+
+################ How many comorbidities in OCD group #################
+# Classify comorbidities and calculate total OCD
+all_ksads_diagnosis <- all_ksads_diagnosis %>%
+  mutate(
+    comorbidities = adhd + any_bipolar + any_conduct_odd + any_depressive_disorder + 
+                    any_anxiety_disorder + any_drug_use_disorder + any_eating_disorder + 
+                    ptsd + any_suicidality
+  ) 
+
+
+# Find those with OCD and categorize by comorbidities
+ocd_with_comorbidities <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p == 0) %>%
+  mutate(
+    comorbidity_group = case_when(
+      comorbidities == 0 ~ "0 comorbidities",
+      comorbidities == 1 ~ "1 comorbidity",
+      comorbidities == 2 ~ "2 comorbidities",
+      comorbidities >= 3 ~ "3 or more comorbidities"
+    )
+  )
+
+# Count subjects in each category
+ocd_comorbidity_counts <- ocd_with_comorbidities %>%
+  group_by(comorbidity_group) %>%
+  summarise(count = n())
+
+print(ocd_comorbidity_counts)
+```
+
+```{r}
+
+write.csv(all_ksads_diagnosis, "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/comorbidities.csv", row.names = FALSE)
+```
+
+
+

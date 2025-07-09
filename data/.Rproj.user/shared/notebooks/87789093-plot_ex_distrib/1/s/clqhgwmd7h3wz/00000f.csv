@@ -1,0 +1,2 @@
+"0","##list of people to include in analysis subids.csv"
+"0","subids <- read.csv(""/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/subids.csv"") "

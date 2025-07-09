@@ -1,0 +1,448 @@
+---
+title: "Predict four symptom domains"
+author: "MochiBear.Hei"
+date: "04.13.2025"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Data manipulation
+library(dplyr)
+library(tidyr)
+
+# Modeling
+library(caret)     # used for train/test split setup and model support
+library(xgboost)   # main model used
+
+# Utilities
+library(knitr)     # for reporting chunks
+library(ggplot2)
+library(viridis)  # For consistent color palette
+
+```
+
+# Load
+## ID list
+```{r}
+##list of people to include from flow script
+subids <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/subids.csv") %>%
+  select(src_subject_id, ksads_11_917_p) %>% #categorical diagnosis of ocd from ksads , 0 = no ocd current or present diagnosis
+  mutate(ksads_11_917_p = as.factor(ksads_11_917_p)) # Convert to factor
+
+```
+
+## MRI
+```{r}
+mri <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/mri.csv") %>%
+  select (-smri_vol_scs_lesionlh, -smri_vol_scs_lesionrh, -smri_vol_scs_intracranialv) #have 4897 NA each + colinear  
+
+full_dat <- inner_join(subids, mri, by = "src_subject_id")
+```
+
+## CBCL
+```{r}
+cbcl <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_p_cbcl.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id,cbcl_scr_syn_external_t) %>%
+  distinct(src_subject_id, .keep_all = TRUE) %>%
+  mutate(
+    # bin the raw t scores by clinical cutoffs
+    cbcl_externalizing = cut(
+      cbcl_scr_syn_external_t,
+      breaks = c(-Inf, 65, 70, Inf),
+      labels = c("normal", "borderline", "clinical"),
+      right = FALSE
+    ),
+    # convert the factors to numeric class labels: normal = 0, borderline = 1, clinical = 2
+    cbcl_externalizing = as.numeric(cbcl_externalizing) - 1
+  ) %>%
+  select(src_subject_id, cbcl_externalizing)
+
+# merge
+full_dat <- inner_join(full_dat, cbcl, by = "src_subject_id")
+```
+
+# Handle NA
+```{r}
+na_counts <- colSums(is.na(full_dat))
+na_counts[na_counts > 0]  # print only columns with NA values
+
+
+# mean imputation: 
+full_dat <- full_dat %>%
+  mutate(across(c(mrisdp_508, mrisdp_527, mrisdp_567, mrisdp_582, mrisdp_601, mrisdp_602, mrisdp_603, mrisdp_604),
+                ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
+
+```
+
+# Split data
+```{r}
+library(caret)
+
+set.seed(123)
+
+# Create stratified split indices for cbcl_externalizing
+train_index <- createDataPartition(full_dat$cbcl_externalizing, p = 0.7, list = FALSE)
+train_data <- full_dat[train_index, ]
+remaining_data <- full_dat[-train_index, ]
+
+# Now split the remaining 30% (test + calib) equally (15/15) with stratification again
+test_index <- createDataPartition(remaining_data$cbcl_externalizing, p = 0.5, list = FALSE)
+calib_data <- remaining_data[-test_index, ]
+test_data <- remaining_data[test_index, ]
+
+################# check
+
+cat("Full dataset:\n")
+print(table(full_dat$cbcl_externalizing))
+
+cat("\nTraining set:\n")
+print(table(train_data$cbcl_externalizing))
+
+cat("\nCalibration set:\n")
+print(table(calib_data$cbcl_externalizing))
+
+cat("\nTest set:\n")
+print(table(test_data$cbcl_externalizing))
+
+```
+
+target preperation
+```{r}
+#remove irrelavant targets 
+cols_to_remove <- c("src_subject_id", "ksads_11_917_p")
+
+#model matrices directly from split data
+x_train <- model.matrix(cbcl_externalizing ~ ., train_data %>% select(-all_of(cols_to_remove)))[, -1]
+x_calib <- model.matrix(cbcl_externalizing ~ ., calib_data %>% select(-all_of(cols_to_remove)))[, -1]
+x_test  <- model.matrix(cbcl_externalizing ~ ., test_data  %>% select(-all_of(cols_to_remove)))[, -1]
+
+
+#target variables
+y_train <- train_data$cbcl_externalizing
+y_calib <- calib_data$cbcl_externalizing
+y_test  <- test_data$cbcl_externalizing
+
+#set labels for models = 0, 1, 2, 
+class_labels <- sort(unique(train_data$cbcl_externalizing))
+```
+
+# Model Training
+class weghts 
+```{r}
+#####without weights 
+#dtrain <- xgb.DMatrix(data = x_train, label = y_train)
+
+#####with weights:
+#calculate
+class_counts <- table(y_train)
+class_weights <- sum(class_counts) / (length(class_counts) * class_counts)
+train_weights <- class_weights[as.character(y_train)]
+
+#xgboost training set matrix with weights 
+dtrain <- xgb.DMatrix(data = x_train, label = y_train, weight = train_weights)
+
+```
+
+# Default parametersW or Wout weights
+```{r}
+dtest <- xgb.DMatrix(data = x_test, label = y_test)
+
+default_params <- list(
+  booster = "gbtree",
+  objective = "multi:softprob",
+  eval_metric = "mlogloss",
+  num_class = length(class_labels)
+)
+
+default_model <- xgb.train(
+  params = default_params,
+  data = dtrain,
+  nrounds = 50,  
+  verbose = 0
+)
+
+pred_probs <- predict(default_model, x_test)
+
+pred_matrix <- matrix(pred_probs, nrow = length(class_labels), byrow = TRUE)
+y_pred <- max.col(t(pred_matrix)) - 1  # adjust for 0-indexing
+
+conf_matrix <- confusionMatrix(
+  factor(y_pred, levels = class_labels),
+  factor(y_test, levels = class_labels)
+)
+
+print(conf_matrix)
+
+```
+
+hyper parameter tuning
+```{r}
+param_grid <- expand.grid(
+  nrounds = c(50, 100, 150),
+  max_depth = c(3, 5, 7, 9),
+  min_child_weight = c(1, 5),
+  eta = c(0.01, 0.05, 0.1),
+  gamma = c(0, 0.5, 2),
+  subsample = c(0.6, 0.9),
+  colsample_bytree = c(0.6, 0.9)
+)
+
+#keep track
+best_mlogloss <- Inf
+best_params <- NULL
+best_nrounds <- NULL
+num_class <- length(unique(y_train))
+
+# Initialize a results dataframe
+results_df <- data.frame()
+
+# Tuning via grid with 5-fold CV
+for (i in 1:nrow(param_grid)) {
+  grid <- param_grid[i, ]
+
+  params <- list(
+    booster = "gbtree",
+    objective = "multi:softprob",
+    eval_metric = "mlogloss",
+    max_depth = grid$max_depth,
+    min_child_weight = grid$min_child_weight,
+    eta = grid$eta,
+    gamma = grid$gamma,
+    subsample = grid$subsample,
+    colsample_bytree = grid$colsample_bytree,
+    nthread = 1,
+    num_class = num_class
+  )
+
+  cv_results <- xgb.cv(
+    params = params,
+    data = dtrain,
+    nfold = 5,
+    nrounds = grid$nrounds,
+    early_stopping_rounds = 10,
+    verbose = 0
+  )
+
+  mean_mlogloss <- min(cv_results$evaluation_log$test_mlogloss_mean)
+
+  # Store parameters and performance
+  results_df <- rbind(results_df, data.frame(
+    nrounds = grid$nrounds,
+    max_depth = grid$max_depth,
+    min_child_weight = grid$min_child_weight,
+    eta = grid$eta,
+    gamma = grid$gamma,
+    subsample = grid$subsample,
+    colsample_bytree = grid$colsample_bytree,
+    mlogloss = mean_mlogloss
+  ))
+
+  if (mean_mlogloss < best_mlogloss) {
+    best_mlogloss <- mean_mlogloss
+    best_params <- params
+    best_nrounds <- grid$nrounds
+  }
+
+  cat("Grid search progress:", i, "/", nrow(param_grid), 
+      "| Current mlogloss:", round(mean_mlogloss, 5), "\n")
+}
+
+
+cat("✅ Best multiclass log loss:", best_mlogloss, "\n")
+cat("✅ Best Parameters:\n")
+print(best_params)
+cat("✅ Best Number of Rounds:", best_nrounds, "\n")
+
+
+# Save results to CSV
+write.csv(results_df, "cbcl_external_hyperparameter_tuning_results.csv", row.names = FALSE)
+```
+
+# Tuned Model
+
+Make predictions
+```{r}
+#results_df <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd//outputs/models/multiclass_cbcl_bpm/cbcl_external_hyperparameter_tuning_results.csv")
+
+#load("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_cbcl_i_model+preds.RData")
+#xgboost test matrix 
+dcalib <- xgb.DMatrix(data = x_calib, label = y_calib)
+
+#train final best model
+final_model <- xgb.train(
+  params = params,
+  data = dtrain,
+  nrounds = best_nrounds,
+  watchlist = list(train = dtrain, eval = dcalib),
+  verbose = 1
+)
+
+# predict on calibration set 
+pred_probs <- predict(final_model, dcalib, reshape = TRUE, outputmargin = FALSE)
+colnames(pred_probs) <- class_labels
+#argmax
+pred_classes_argmax <- max.col(pred_probs) - 1  # match class labels 0,1,2
+```
+
+
+#save the predictions 
+```{r}
+#save model
+xgb.save(final_model,  fname = "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_cbcl_e_model.model")
+
+#save everything together
+save(final_model, x_test, y_test, x_calib, y_calib, pred_probs, pred_classes_argmax, train_data, test_data, calib_data, dcalib,
+     file = "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_cbcl_e_model+preds.RData")
+```
+
+
+# Plot hyperparameters
+```{r}
+p <- plot_ly(
+  type = 'parcoords',
+  line = list(
+    color = results_df$mlogloss,
+    colorscale = 'Viridis',
+    showscale = TRUE,
+    colorbar = list(title = "Log Loss"),
+    cmin = 1.0900,
+    cmax = 1.1088,
+    opacity = 1
+  ),
+  dimensions = list(
+    list(label = "Log Loss", 
+         values = results_df$mlogloss,
+         tickformat = ".4f"),
+    
+    list(label = "Max Depth", 
+         values = results_df$max_depth,
+         tickvals = sort(unique(results_df$max_depth))),
+    
+    list(label = "Learning Rate", 
+         values = results_df$eta,
+         tickvals = c(0.01, 0.03, 0.05, 0.07, 0.1)),
+    
+    list(label = "Rounds", 
+         values = results_df$nrounds),
+    
+    list(label = "Gamma", 
+         values = results_df$gamma,
+         tickvals = sort(unique(results_df$gamma))),
+    
+    list(label = "Subsample", 
+         values = results_df$subsample,
+         tickvals = c(0.6, 0.7, 0.8, 0.9)),
+    
+    list(label = "Colsample<br>Bytree", 
+         values = results_df$colsample_bytree,
+         tickvals = c(0.6, 0.7, 0.8, 0.9))
+  )
+) %>%
+  layout(
+    title = list(
+      text = "Hyperparameter Optimization Parallel Plot",
+      font = list(size = 22, family = "Arial"),
+      x = 0.5,
+      xanchor = "center"
+    ),
+    margin = list(
+      t = 80, b = 60, l = 120, r = 120
+    )
+  )
+
+
+#save
+htmlwidgets::saveWidget(p, "parallel_coords_plot.html", selfcontained = TRUE)
+p
+
+```
+
+# Plot hyperparameter history
+```{r}
+results_df$Trial <- seq_len(nrow(results_df))
+results_df$best_so_far <- cummin(results_df$mlogloss)
+
+p2 <- ggplot(results_df, aes(x = Trial, y = mlogloss)) +
+  geom_point(aes(color = mlogloss), size = 2, alpha = 0.8) +
+  geom_line(aes(y = best_so_far, linetype = "Best Model"), color = "red", size = 1, show.legend = TRUE) +
+  geom_point(aes(shape = "Trial Log Loss"), x = Inf, y = Inf, show.legend = TRUE) +
+  scale_color_viridis(option = "viridis", name = "Log Loss", direction = -1) +
+  scale_shape_manual(name = "", values = c("Trial Log Loss" = 16)) +
+  scale_linetype_manual(name = "", values = c("Best Model" = "solid")) +
+  guides(
+    color = guide_colorbar(order = 1),
+    shape = guide_legend(
+      override.aes = list(color = "black", size = 3), 
+      order = 2
+    ),
+    linetype = guide_legend(
+      override.aes = list(color = "red", size = 1),
+      order = 3
+    )
+  ) +
+
+  scale_x_continuous(
+    limits = c(1, max(results_df$Trial)),
+    breaks = pretty(results_df$Trial)
+  ) +
+  labs(
+    title = "Optimization of Tuning Parameters",
+    x = "Iteration",
+    y = "Multiclass Log Loss"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(size = 20, face = "bold"),
+    legend.position = "right"
+  )
+
+p2
+
+#ggsave("optimization_history_cbcl_i.png", plot = p2, width = 10, height = 6, dpi = 300)
+
+```

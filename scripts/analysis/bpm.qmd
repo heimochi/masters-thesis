@@ -1,0 +1,78 @@
+---
+title: "Breif prolem monitor"
+author: "MochiBear.Hei"
+date: "12.09.2024"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Data manipulation
+library(dplyr)
+library(tidyr)
+
+# Plotting
+library(ggplot2)
+
+# Utilities
+library(knitr)
+```
+
+
+```{r}
+bpm <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_y_bpm.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id, bpm_y_scr_internal_t, bpm_y_scr_external_t, bpm_y_scr_totalprob_t) %>%
+  distinct(src_subject_id, .keep_all = TRUE) %>% #remove duplicates
+  mutate(across(c(bpm_y_scr_internal_t, bpm_y_scr_external_t, bpm_y_scr_totalprob_t), scale)) #standardize scores 
+```
+
+# Save as csv
+```{r}
+write.csv(bpm, "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/ocd/bpm.csv", row.names = FALSE)
+```
+

@@ -1,0 +1,8 @@
+"0","#set labels for models = 0, 1, 2, "
+"0","class_labels <- sort(unique(train_data$bpm_externalizing))"
+"0",""
+"0","dcalib <- xgb.DMatrix(data = x_calib, label = y_calib)"
+"0",""
+"0","#predict on calibration set "
+"0","pred_probs_calib <- predict(final_model, dcalib, reshape = TRUE, outputmargin = FALSE)"
+"0","colnames(pred_probs_calib) <- as.character(class_labels)"

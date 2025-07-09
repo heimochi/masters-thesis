@@ -1,0 +1,7 @@
+"0","all_ksads_diagnosis <- all_ksads_diagnosis %>%"
+"0","  select("
+"0","    src_subject_id,"
+"0","    ksads_11_917_p"
+"0","  )"
+"0",""
+"0","write.csv(all_ksads_diagnosis, ""/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/src_subject_id.csv"", row.names = FALSE)"

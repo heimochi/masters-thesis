@@ -1,0 +1,7 @@
+"0","#target variables"
+"0","y_train <- train_data$cbcl_externalizing"
+"0","y_calib <- calib_data$cbcl_externalizing"
+"0","y_test  <- test_data$cbcl_externalizing"
+"0",""
+"0","#set labels for models = 0, 1, 2, "
+"0","class_labels <- sort(unique(train_data$cbcl_externalizing))"

@@ -1,0 +1,4 @@
+"0","x_calib <- model.matrix(cbcl_externalizing ~ ., calib_data %>% select(-all_of(cols_to_remove)))[, -1]"
+"2","Error in eval(predvars, data, env) : 
+  object 'cbcl_externalizing' not found
+"

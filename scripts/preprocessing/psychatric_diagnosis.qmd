@@ -1,0 +1,692 @@
+
+
+
+---
+title: "Demographic characteristics"
+author: "MochiBear.Hei"
+date: "12.20.2024"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Data manipulation
+library(dplyr)
+library(tidyr)
+
+# Plotting
+library(ggplot2)
+
+# Utilities
+library(knitr)
+
+library(gt)
+library(epitools)
+```
+
+## Load
+```{r}
+
+all_ksads_diagnosis <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/comorbidities.csv") %>%
+  select(
+    src_subject_id,
+    ksads_11_917_p,
+    adhd,
+    any_bipolar,
+    any_conduct_odd,
+    any_depressive_disorder,
+    any_anxiety_disorder,
+    any_drug_use_disorder,
+    any_eating_disorder,
+    ptsd,
+    any_suicidality,
+    no_diagnosis,
+    only_ocd,
+    comorbidities
+  ) %>%
+  filter(!is.na(ksads_11_917_p))
+
+##list of people to include from flow script
+subids <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/subids.csv") %>%
+  select(src_subject_id) 
+
+all_ksads_diagnosis <- inner_join(subids, all_ksads_diagnosis, by = "src_subject_id")
+
+## how many with no ocd
+total_ocd_absent <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p != 1) %>% # Filter for cases where OCD is absent
+  summarise(total_ocd_absent = n_distinct(src_subject_id)) %>%
+  pull(total_ocd_absent)
+
+cat("Total number of people with OCD absent:", total_ocd_absent, "\n")
+
+
+```
+
+##Check individually
+Depressive disorders 
+```{r}
+# Total number of people in the full sample with any depressive disorder
+total_depressive_disorder_full <- all_ksads_diagnosis %>%
+  filter(any_depressive_disorder == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD present sample with any depressive disorder
+total_depressive_disorder_ocd_present <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p == 1, any_depressive_disorder == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD absent sample with any depressive disorder
+total_depressive_disorder_ocd_absent <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p != 1, any_depressive_disorder == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Display the results
+cat("Total number of people in the full sample with any depressive disorder:", total_depressive_disorder_full, "\n")
+cat("Total number of people with OCD and any depressive disorder:", total_depressive_disorder_ocd_present, "\n")
+cat("Total number of people without OCD and with any depressive disorder:", total_depressive_disorder_ocd_absent, "\n")
+
+```
+
+Anxiety disorders
+```{r}
+# Total number of people in the full sample with any anxiety disorder
+total_anxiety_disorder_full <- all_ksads_diagnosis %>%
+  filter(any_anxiety_disorder == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD present sample with any anxiety disorder
+total_anxiety_disorder_ocd_present <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p == 1, any_anxiety_disorder == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD absent sample with any anxiety disorder
+total_anxiety_disorder_ocd_absent <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p != 1, any_anxiety_disorder == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Display the results
+cat("Total number of people in the full sample with any anxiety disorder:", total_anxiety_disorder_full, "\n")
+cat("Total number of people with OCD and any anxiety disorder:", total_anxiety_disorder_ocd_present, "\n")
+cat("Total number of people without OCD and with any anxiety disorder:", total_anxiety_disorder_ocd_absent, "\n")
+
+```
+
+ADHD
+```{r}
+# Total number of people in the full sample with any anxiety disorder
+total_adhd_full <- all_ksads_diagnosis %>%
+  filter(adhd == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD present sample with any anxiety disorder
+total_adhd_ocd_present <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p == 1, adhd == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD absent sample with any anxiety disorder
+total_adhd_ocd_absent <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p != 1, adhd == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Display the results
+cat("Total number of people in the full sample with adhd:", total_adhd_full, "\n")
+cat("Total number of people with OCD and adhd:", total_adhd_ocd_present, "\n")
+cat("Total number of people without OCD and adhd:", total_adhd_ocd_absent, "\n")
+```
+
+ODD /CD
+any_conduct_odd
+```{r}
+# Total number of people in the full sample with any anxiety disorder
+total_odd_full <- all_ksads_diagnosis %>%
+  filter(any_conduct_odd == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD present sample with any anxiety disorder
+total_odd_ocd_present <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p == 1, any_conduct_odd == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD absent sample with any anxiety disorder
+total_odd_ocd_absent <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p != 1, any_conduct_odd == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Display the results
+cat("Total number of people in the full sample with odd:", total_odd_full, "\n")
+cat("Total number of people with OCD and odd:", total_odd_ocd_present, "\n")
+cat("Total number of people without OCD and odd:", total_odd_ocd_absent, "\n")
+```
+
+PTSD
+ptsd
+```{r}
+# Total number of people in the full sample with any anxiety disorder
+total_ptsd_full <- all_ksads_diagnosis %>%
+  filter(ptsd == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD present sample with any anxiety disorder
+total_ptsd_ocd_present <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p == 1, ptsd == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD absent sample with any anxiety disorder
+total_ptsd_ocd_absent <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p != 1, ptsd == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Display the results
+cat("Total number of people in the full sample with ptsd:", total_ptsd_full, "\n")
+cat("Total number of people with OCD and ptsd:", total_ptsd_ocd_present, "\n")
+cat("Total number of people without OCD and ptsd:", total_ptsd_ocd_absent, "\n")
+```
+
+Drug use disorder
+"any_drug_use_disorder" 
+```{r}
+# Total number of people in the full sample with any anxiety disorder
+total_any_drug_use_disorder_full <- all_ksads_diagnosis %>%
+  filter(any_drug_use_disorder == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD present sample with any anxiety disorder
+total_any_drug_use_disorder_ocd_present <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p == 1, any_drug_use_disorder == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD absent sample with any anxiety disorder
+total_any_drug_use_disorder_ocd_absent <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p != 1, any_drug_use_disorder == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Display the results
+cat("Total number of people in the full sample with any_drug_use_disorder:", total_any_drug_use_disorder_full, "\n")
+cat("Total number of people with OCD and any_drug_use_disorder:", total_any_drug_use_disorder_ocd_present, "\n")
+cat("Total number of people without OCD and any_drug_use_disorder:", total_any_drug_use_disorder_ocd_absent, "\n")
+```
+
+Bipolar
+"any_bipolar" 
+```{r}
+# Total number of people in the full sample with any anxiety disorder
+total_any_bipolar_full <- all_ksads_diagnosis %>%
+  filter(any_bipolar == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD present sample with any anxiety disorder
+total_any_bipolar_ocd_present <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p == 1, any_bipolar == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD absent sample with any anxiety disorder
+total_any_bipolar_ocd_absent <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p != 1, any_bipolar == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Display the results
+cat("Total number of people in the full sample with any_bipolar:", total_any_bipolar_full, "\n")
+cat("Total number of people with OCD and any_bipolar:", total_any_bipolar_ocd_present, "\n")
+cat("Total number of people without OCD and any_bipolar:", total_any_bipolar_ocd_absent, "\n")
+```
+
+Eating disorder
+"any_eating_disorder"
+```{r}
+# Total number of people in the full sample with any anxiety disorder
+total_any_eating_disorder_full <- all_ksads_diagnosis %>%
+  filter(any_eating_disorder == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD present sample with any anxiety disorder
+total_any_eating_disorder_ocd_present <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p == 1, any_eating_disorder == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD absent sample with any anxiety disorder
+total_any_eating_disorder_ocd_absent <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p != 1, any_eating_disorder == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Display the results
+cat("Total number of people in the full sample with any_eating_disorder:", total_any_eating_disorder_full, "\n")
+cat("Total number of people with OCD and any_eating_disorder:", total_any_eating_disorder_ocd_present, "\n")
+cat("Total number of people without OCD and any_eating_disorder:", total_any_eating_disorder_ocd_absent, "\n")
+```
+
+Suicidality
+"any_suicidality"  
+```{r}
+# Total number of people in the full sample with any anxiety disorder
+total_any_suicidality_full <- all_ksads_diagnosis %>%
+  filter(any_suicidality == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD present sample with any anxiety disorder
+total_any_suicidality_ocd_present <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p == 1, any_suicidality == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD absent sample with any anxiety disorder
+total_any_suicidality_ocd_absent <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p != 1, any_suicidality == 1) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Display the results
+cat("Total number of people in the full sample with any_suicidality:", total_any_suicidality_full, "\n")
+cat("Total number of people with OCD and any_suicidality:", total_any_suicidality_ocd_present, "\n")
+cat("Total number of people without OCD and any_suicidality:", total_any_suicidality_ocd_absent, "\n")
+```
+No diagnosis
+```{r}
+# Defining a helper function to calculate totals based on specified conditions
+calculate_total <- function(data, ocd_condition) {
+  data %>%
+    filter(
+      ksads_11_917_p == ocd_condition,
+      adhd == 0,
+      any_bipolar == 0,
+      any_conduct_odd == 0,
+      any_depressive_disorder == 0,
+      any_anxiety_disorder == 0,
+      any_drug_use_disorder == 0,
+      any_eating_disorder == 0,
+      ptsd == 0,
+      any_suicidality == 0
+    ) %>%
+    summarise(total = n_distinct(src_subject_id)) %>%
+    pull(total)
+}
+
+# Total number of people in the full sample with no diagnosis
+total_no_diagnosis_full <- all_ksads_diagnosis %>%
+  filter(
+    adhd == 0,
+    any_bipolar == 0,
+    any_conduct_odd == 0,
+    any_depressive_disorder == 0,
+    any_anxiety_disorder == 0,
+    any_drug_use_disorder == 0,
+    any_eating_disorder == 0,
+    ptsd == 0,
+    any_suicidality == 0
+  ) %>%
+  summarise(total = n_distinct(src_subject_id)) %>%
+  pull(total)
+
+# Total number of people in the OCD present sample with no other diagnosis
+total_no_other_diagnosis_ocd_present <- calculate_total(all_ksads_diagnosis, 1)
+
+# Total number of people in the OCD absent sample with no diagnosis
+total_no_diagnosis_ocd_absent <- calculate_total(all_ksads_diagnosis, 0)
+
+# Display the results
+cat("Total number of people in the full sample with no diagnosis:", total_no_diagnosis_full, "\n")
+cat("Total number of people with OCD and no other diagnosis:", total_no_other_diagnosis_ocd_present, "\n")
+cat("Total number of people without OCD and no diagnosis:", total_no_diagnosis_ocd_absent, "\n")
+```
+
+# CBCL
+```{r}
+dsm_diagnosis <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_p_cbcl.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id, cbcl_scr_syn_attention_t, cbcl_scr_dsm5_anxdisord_t, cbcl_scr_dsm5_adhd_t, cbcl_scr_dsm5_depress_t, cbcl_scr_dsm5_somaticpr_t, cbcl_scr_dsm5_opposit_t, cbcl_scr_dsm5_conduct_t, cbcl_scr_syn_internal_t, cbcl_scr_syn_external_t, cbcl_scr_syn_totprob_t, cbcl_scr_07_ocd_t)
+
+##list of people to include from flow script
+subids <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/subids.csv") %>%
+  select(src_subject_id, ksads_11_917_p) 
+
+
+dsm_diagnosis <- inner_join(subids, dsm_diagnosis, by = "src_subject_id")
+```
+
+Merge DSM diagnosis with OCD diagnosis
+```{r}
+## how many with no ocd
+# Calculate the total number of people with OCD absent
+total_ocd_absent <- dsm_diagnosis %>%
+  filter(ksads_11_917_p != 1) %>% # Filter for cases where OCD is absent
+  summarise(total_ocd_absent = n_distinct(src_subject_id)) %>%
+  pull(total_ocd_absent)
+
+# Display the result
+cat("Total number of people with OCD absent:", total_ocd_absent, "\n")
+
+## how many with ocd
+# Calculate the total number of people with OCD absent
+total_ocd_present <- dsm_diagnosis %>%
+  filter(ksads_11_917_p == 1) %>% # Filter for cases where OCD is absent
+  summarise(total_ocd_present = n_distinct(src_subject_id)) %>%
+  pull(total_ocd_present)
+
+# Display the result
+cat("Total number of people with OCD present:", total_ocd_present, "\n")
+
+
+```
+
+## DSM comorbidity
+```{r}
+
+# Full dataset statistics for each T score category
+full_sample_stats <- dsm_diagnosis %>%
+  summarise(
+    mean_attention_t = mean(cbcl_scr_syn_attention_t, na.rm = TRUE),
+    sd_attention_t = sd(cbcl_scr_syn_attention_t, na.rm = TRUE),
+    mean_anxdisord_t = mean(cbcl_scr_dsm5_anxdisord_t, na.rm = TRUE),
+    sd_anxdisord_t = sd(cbcl_scr_dsm5_anxdisord_t, na.rm = TRUE),
+    mean_adhd_t = mean(cbcl_scr_dsm5_adhd_t, na.rm = TRUE),
+    sd_adhd_t = sd(cbcl_scr_dsm5_adhd_t, na.rm = TRUE),
+    mean_depress_t = mean(cbcl_scr_dsm5_depress_t, na.rm = TRUE),
+    sd_depress_t = sd(cbcl_scr_dsm5_depress_t, na.rm = TRUE),
+    mean_somaticpr_t = mean(cbcl_scr_dsm5_somaticpr_t, na.rm = TRUE),
+    sd_somaticpr_t = sd(cbcl_scr_dsm5_somaticpr_t, na.rm = TRUE),
+    mean_opposit_t = mean(cbcl_scr_dsm5_opposit_t, na.rm = TRUE),
+    sd_opposit_t = sd(cbcl_scr_dsm5_opposit_t, na.rm = TRUE),
+    mean_conduct_t = mean(cbcl_scr_dsm5_conduct_t, na.rm = TRUE),
+    sd_conduct_t = sd(cbcl_scr_dsm5_conduct_t, na.rm = TRUE),
+    mean_internal_t = mean(cbcl_scr_syn_internal_t, na.rm = TRUE),
+    sd_internal_t = sd(cbcl_scr_syn_internal_t, na.rm = TRUE),
+    mean_external_t = mean(cbcl_scr_syn_external_t, na.rm = TRUE),
+    sd_external_t = sd(cbcl_scr_syn_external_t, na.rm = TRUE),
+    mean_totprob_t = mean(cbcl_scr_syn_totprob_t, na.rm = TRUE),
+    sd_totprob_t = sd(cbcl_scr_syn_totprob_t, na.rm = TRUE),
+    mean_ocd_t = mean(cbcl_scr_07_ocd_t, na.rm = TRUE),
+    sd_ocd_t = sd(cbcl_scr_07_ocd_t, na.rm = TRUE)
+  )
+
+# Statistics for OCD present population
+ocd_present_stats <- dsm_diagnosis %>%
+  filter(ksads_11_917_p == 1) %>%
+  summarise(
+    mean_attention_t = mean(cbcl_scr_syn_attention_t, na.rm = TRUE),
+    sd_attention_t = sd(cbcl_scr_syn_attention_t, na.rm = TRUE),
+    mean_anxdisord_t = mean(cbcl_scr_dsm5_anxdisord_t, na.rm = TRUE),
+    sd_anxdisord_t = sd(cbcl_scr_dsm5_anxdisord_t, na.rm = TRUE),
+    mean_adhd_t = mean(cbcl_scr_dsm5_adhd_t, na.rm = TRUE),
+    sd_adhd_t = sd(cbcl_scr_dsm5_adhd_t, na.rm = TRUE),
+    mean_depress_t = mean(cbcl_scr_dsm5_depress_t, na.rm = TRUE),
+    sd_depress_t = sd(cbcl_scr_dsm5_depress_t, na.rm = TRUE),
+    mean_somaticpr_t = mean(cbcl_scr_dsm5_somaticpr_t, na.rm = TRUE),
+    sd_somaticpr_t = sd(cbcl_scr_dsm5_somaticpr_t, na.rm = TRUE),
+    mean_opposit_t = mean(cbcl_scr_dsm5_opposit_t, na.rm = TRUE),
+    sd_opposit_t = sd(cbcl_scr_dsm5_opposit_t, na.rm = TRUE),
+    mean_conduct_t = mean(cbcl_scr_dsm5_conduct_t, na.rm = TRUE),
+    sd_conduct_t = sd(cbcl_scr_dsm5_conduct_t, na.rm = TRUE),
+    mean_internal_t = mean(cbcl_scr_syn_internal_t, na.rm = TRUE),
+    sd_internal_t = sd(cbcl_scr_syn_internal_t, na.rm = TRUE),
+    mean_external_t = mean(cbcl_scr_syn_external_t, na.rm = TRUE),
+    sd_external_t = sd(cbcl_scr_syn_external_t, na.rm = TRUE),
+    mean_totprob_t = mean(cbcl_scr_syn_totprob_t, na.rm = TRUE),
+    sd_totprob_t = sd(cbcl_scr_syn_totprob_t, na.rm = TRUE),
+    mean_ocd_t = mean(cbcl_scr_07_ocd_t, na.rm = TRUE),
+    sd_ocd_t = sd(cbcl_scr_07_ocd_t, na.rm = TRUE)
+  )
+
+# Statistics for OCD absent population
+ocd_absent_stats <- dsm_diagnosis %>%
+  filter(ksads_11_917_p == 0) %>%
+  summarise(
+    mean_attention_t = mean(cbcl_scr_syn_attention_t, na.rm = TRUE),
+    sd_attention_t = sd(cbcl_scr_syn_attention_t, na.rm = TRUE),
+    mean_anxdisord_t = mean(cbcl_scr_dsm5_anxdisord_t, na.rm = TRUE),
+    sd_anxdisord_t = sd(cbcl_scr_dsm5_anxdisord_t, na.rm = TRUE),
+    mean_adhd_t = mean(cbcl_scr_dsm5_adhd_t, na.rm = TRUE),
+    sd_adhd_t = sd(cbcl_scr_dsm5_adhd_t, na.rm = TRUE),
+    mean_depress_t = mean(cbcl_scr_dsm5_depress_t, na.rm = TRUE),
+    sd_depress_t = sd(cbcl_scr_dsm5_depress_t, na.rm = TRUE),
+    mean_somaticpr_t = mean(cbcl_scr_dsm5_somaticpr_t, na.rm = TRUE),
+    sd_somaticpr_t = sd(cbcl_scr_dsm5_somaticpr_t, na.rm = TRUE),
+    mean_opposit_t = mean(cbcl_scr_dsm5_opposit_t, na.rm = TRUE),
+    sd_opposit_t = sd(cbcl_scr_dsm5_opposit_t, na.rm = TRUE),
+    mean_conduct_t = mean(cbcl_scr_dsm5_conduct_t, na.rm = TRUE),
+    sd_conduct_t = sd(cbcl_scr_dsm5_conduct_t, na.rm = TRUE),
+    mean_internal_t = mean(cbcl_scr_syn_internal_t, na.rm = TRUE),
+    sd_internal_t = sd(cbcl_scr_syn_internal_t, na.rm = TRUE),
+    mean_external_t = mean(cbcl_scr_syn_external_t, na.rm = TRUE),
+    sd_external_t = sd(cbcl_scr_syn_external_t, na.rm = TRUE),
+    mean_totprob_t = mean(cbcl_scr_syn_totprob_t, na.rm = TRUE),
+    sd_totprob_t = sd(cbcl_scr_syn_totprob_t, na.rm = TRUE),
+    mean_ocd_t = mean(cbcl_scr_07_ocd_t, na.rm = TRUE),
+    sd_ocd_t = sd(cbcl_scr_07_ocd_t, na.rm = TRUE)
+  )
+
+# Print summaries
+print("Full Sample Statistics")
+print(full_sample_stats)
+
+print("OCD Present Statistics")
+print(ocd_present_stats)
+
+print("OCD Absent Statistics")
+print(ocd_absent_stats)
+
+```
+### t-test 
+```{r}
+# Perform t-test for each CBCL diagnostic category
+t_test_results_cbcl <- dsm_diagnosis %>%
+  mutate(has_ocd = if_else(ksads_11_917_p == 1, "OCD", "No OCD")) %>%
+  pivot_longer(
+    cols = c(cbcl_scr_dsm5_anxdisord_t, cbcl_scr_dsm5_adhd_t, cbcl_scr_dsm5_depress_t, 
+             cbcl_scr_dsm5_somaticpr_t, cbcl_scr_dsm5_opposit_t, cbcl_scr_dsm5_conduct_t),
+    names_to = "comorbidity",
+    values_to = "score"
+  ) %>%
+  group_by(comorbidity) %>%
+  summarise(
+    t_test_result = list(t.test(score ~ has_ocd, data = .)),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    p_value = map_dbl(t_test_result, ~ .x$p.value),
+    t_statistic = map_dbl(t_test_result, ~ .x$statistic)
+  ) %>%
+  select(comorbidity, p_value, t_statistic)
+
+# View results
+print(t_test_results_cbcl)
+```
+
+### Cohens D (effect size)
+```{r}
+
+```
+
+
+```{r}
+# Create a function to summarize diagnoses
+summarize_diagnosis <- function(data, diagnosis_col, group_col) {
+  data %>%
+    group_by(!!sym(group_col)) %>%
+    summarise(
+      n = sum(!is.na(!!sym(diagnosis_col)) & !!sym(diagnosis_col) == 1, na.rm = TRUE),
+      pct = n / nrow(data) * 100
+    )
+}
+
+# Example: Summarize any depressive disorder (ksads_1_840_p) by OCD presence
+depressive_summary <- summarize_diagnosis(merged_diagnosis, "ksads_1_840_p", "ksads_11_917_p")
+
+
+# Perform t-tests and extract p-values and statistics
+cbcl_t_tests <- merged_diagnosis %>%
+  summarise(
+    Anxiety_mean_diff = mean(cbcl_scr_dsm5_anxdisord_t[ksads_11_917_p == 1], na.rm = TRUE) - 
+                        mean(cbcl_scr_dsm5_anxdisord_t[ksads_11_917_p == 0], na.rm = TRUE),
+    Depression_mean_diff = mean(cbcl_scr_dsm5_depress_t[ksads_11_917_p == 1], na.rm = TRUE) - 
+                           mean(cbcl_scr_dsm5_depress_t[ksads_11_917_p == 0], na.rm = TRUE),
+    Anxiety_p_value = t.test(cbcl_scr_dsm5_anxdisord_t ~ ksads_11_917_p, data = ., na.action = na.omit)$p.value,
+    Depression_p_value = t.test(cbcl_scr_dsm5_depress_t ~ ksads_11_917_p, data = ., na.action = na.omit)$p.value,
+    Anxiety_t_stat = t.test(cbcl_scr_dsm5_anxdisord_t ~ ksads_11_917_p, data = ., na.action = na.omit)$statistic,
+    Depression_t_stat = t.test(cbcl_scr_dsm5_depress_t ~ ksads_11_917_p, data = ., na.action = na.omit)$statistic
+  )
+
+# View results
+print(cbcl_t_tests)
+
+# Format results for the table
+table_data <- merged_diagnosis %>%
+  summarise(
+    `DSM-5 Anxiety` = paste0(
+      round(mean(cbcl_scr_dsm5_anxdisord_t, na.rm = TRUE), 2), " (",
+      round(sd(cbcl_scr_dsm5_anxdisord_t, na.rm = TRUE), 2), ")"
+    ),
+    `DSM-5 Depression` = paste0(
+      round(mean(cbcl_scr_dsm5_depress_t, na.rm = TRUE), 2), " (",
+      round(sd(cbcl_scr_dsm5_depress_t, na.rm = TRUE), 2), ")"
+    )
+  )
+
+# Generate the Table Using gt
+summary_data %>%
+  gt() %>%
+  tab_header(
+    title = "Demographic Characteristics of the Sample"
+  ) %>%
+  cols_label(
+    Full_Sample = "Full Sample",
+    `OCD Absent` = "OCD Absent",
+    `OCD Present` = "OCD Present",
+    `Group Difference` = "Group Difference",
+    p = "p",
+    `Effect Size` = "Effect Size"
+  ) %>%
+  fmt_number(
+    decimals = 2
+  )
+# Print the table
+print(final_table)
+```
+
+#	OCS score
+obsessive compulsive score derived from CBCL items
+```{r}
+ocs_score <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/p_data.csv")
+
+ocs_score <- ocs_score %>%
+  select(src_subject_id, ocs_score)
+```
+
+
+
+# Health variables
+```{r}
+health <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/physical-health/ph_p_mhx.csv") 
+
+health <- health %>%
+  select(src_subject_id, eventname, medhx_6i, medhx_6i_l, medhx_2h, medhx_6p, medhx_2h_l) %>%
+  filter(eventname %in% c("baseline_year_1_arm_1", "2_year_follow_up_y_arm_1")) %>%
+  mutate(
+    head_injury = case_when(
+      medhx_6i == 1 | medhx_6i_l == 1 ~ 1,
+      TRUE ~ 0
+    ),
+    seizure = case_when(
+      medhx_2h == 1 | medhx_6p == 1 | medhx_2h_l == 1 ~ 1,
+      TRUE ~ 0
+    )
+  ) %>%
+  select(src_subject_id, head_injury, seizure)
+```
+
+# Medication use
+```{r}
+medication <-  read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/physical-health/ph_p_meds.csv")
+
+# Recode and simplify medication
+```
+
+
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```

@@ -1,0 +1,98 @@
+---
+title: "Plot atlas"
+author: "MochiBear.Hei"
+date: "04.16.2025"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+library(ggseg)
+library(ggseg3d)
+library(ggsegDesterieux)
+library(ggplot2)
+library(dplyr)  
+
+theme_set(theme_classic(base_size = 14))
+```
+
+```{r}
+p_aseg <- ggseg(atlas = aseg, mapping = aes(fill = region)) +
+  facet_wrap(~side, ncol = 2) +
+  scale_fill_viridis_d(option = "plasma", na.value = "grey80") +  # <- add na.value!
+  labs(title = "ASEG Atlas — Subcortical Structures") +
+  theme_void() +
+  theme(
+    legend.position = "none",
+    strip.text = element_blank()
+  )
+
+
+p_aseg
+
+ggsave("aseg_split_brain.png", plot = p_aseg, width = 10, height = 5, dpi = 300)
+```
+
+```{r}
+d <- ggseg(atlas = desterieux, mapping = aes(fill = region)) +
+  facet_wrap(~side, ncol = 2) +
+  scale_fill_viridis_d(option = "C", na.value = "grey80") +
+  theme_void(base_size = 14) +
+  theme(
+    strip.text = element_blank(),
+    legend.position = "none"
+  )
+
+d
+ggsave("destrieux.png", width = 10, height = 5, dpi = 300)
+
+```
+
+```{r}
+
+
+```
+

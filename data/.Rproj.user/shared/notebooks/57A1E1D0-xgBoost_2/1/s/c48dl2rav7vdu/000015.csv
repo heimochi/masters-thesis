@@ -1,0 +1,6 @@
+"0","# Assuming `model` is your trained model from caret"
+"0","# and it has a `results` data frame storing CV results"
+"0","results_df <- model$results"
+"0",""
+"0","# Print results to understand the structure"
+"0","print(head(results_df))"

@@ -1,0 +1,409 @@
+---
+title: "OCD"
+author: "MochiBear.Hei"
+date: "12.16.2024"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Data manipulation
+library(readr)
+library(dplyr)
+library(stringr)
+
+library(scipub)
+library(knitr)
+library(kableExtra)
+
+# Plotting
+library(ggplot2)
+library(naniar)
+library(tidyr)
+library(gridExtra)
+
+# Utilities
+library(knitr)
+
+```
+
+# Merge data
+```{r}
+c_data <- read_csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/c_data.csv", show_col_types = FALSE)
+
+p_data <- read_csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/p_data.csv", show_col_types = FALSE)
+
+#t_data <- read_csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/t_data.csv", show_col_types = FALSE)
+
+demo <- read_csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/demo.csv", show_col_types = FALSE)
+
+latent <- read_csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/abcd-general/abcd_y_lf.csv", show_col_types = FALSE)
+
+# MRI year 2 follow up
+desikan_v <- read_csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/desikan_v.csv", show_col_types = FALSE)
+desikan_ct <- read_csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/desikan_ct.csv", show_col_types = FALSE)
+```
+
+## Parent and youth report 
+
+```{r}
+full_data <- c_data %>%
+  left_join(p_data, by = c("src_subject_id")) 
+```
+
+### how many?
+```{r}
+# Check how many src_subject_id have both child and parent report
+
+unique_count <- full_data %>%
+  # Filter to include only rows where none of the specified columns are NA
+  filter(
+    !is.na(bpm_y_scr_internal_t),
+    !is.na(bpm_y_scr_external_t),
+    !is.na(cbcl_scr_syn_internal_t),
+    !is.na(cbcl_scr_syn_external_t)
+  ) %>%
+  summarise(count = n_distinct(src_subject_id))
+
+# Print the count
+print(unique_count$count)
+```
+
+## Demographic variables: sex, gender, ethnicity, age 
+```{r}
+full_data <- full_data %>%
+  left_join(demo, by = "src_subject_id")
+```
+
+### how many?
+```{r}
+# Filter rows where none of the specified variables are NA and count unique src_subject_id
+count_unique_src_subject_id <- full_data %>%
+  filter(
+         !is.na(bpm_y_scr_internal_t),
+         !is.na(bpm_y_scr_external_t),
+         !is.na(cbcl_scr_syn_internal_t),
+         !is.na(cbcl_scr_syn_external_t),
+         !is.na(demo_sex_v2) &
+         !is.na(demo_gender_id_v2) &
+         !is.na(race_ethnicity) &
+         !is.na(demo_brthdat_v2)) %>%
+  summarise(count = n_distinct(src_subject_id))
+
+# Print the count
+print(count_unique_src_subject_id)
+summary(full_data)
+```
+
+
+## Latent variables:
+1) a general latent factor of economic, social, and physiological well-being, 
+2) a latent factor for youth perceived social support, and 
+3) a latent factor for perinatal health.
+```{r}
+latent <- latent %>%
+  select(-eventname)
+
+full_data <- full_data %>%
+  left_join(latent, by = c("src_subject_id")) 
+```
+
+### how many?
+```{r}
+# Filter rows where none of the specified variables are NA and count unique src_subject_id
+count_unique_src_subject_id <- full_data %>%
+  filter(
+         !is.na(bpm_y_scr_internal_t),
+         !is.na(bpm_y_scr_external_t),
+         !is.na(cbcl_scr_syn_internal_t),
+         !is.na(cbcl_scr_syn_external_t),
+         !is.na(demo_sex_v2) &
+         !is.na(demo_gender_id_v2) &
+         !is.na(race_ethnicity) &
+         !is.na(latent_factor_ss_general_ses) &
+         !is.na(latent_factor_ss_social) &
+         !is.na(latent_factor_ss_perinatal) &
+         !is.na(demo_brthdat_v2)) %>%
+  summarise(count = n_distinct(src_subject_id))
+
+# Print the count
+print(count_unique_src_subject_id)
+```
+
+## MRI: 2 year follow up
+
+```{r}
+full_data <- full_data %>%
+  left_join(desikan_v, by = c("src_subject_id")) %>%
+  left_join(desikan_ct, by = c("src_subject_id"))
+```
+
+### how many?
+Check how many have less than 30% missing including the MRI 
+```{r}
+# Define the columns to exclude from the calculations
+excluded_columns <- c("src_subject_id")
+
+# Count rows where none of the variables are NA (excluding the excluded columns) and count unique src_subject_id
+count_all_non_missing <- full_data %>%
+  filter(across(-all_of(excluded_columns), ~ !is.na(.))) %>%
+  summarise(count = n_distinct(src_subject_id))
+
+# Print the count for rows with no missing values
+print(count_all_non_missing)
+
+# Calculate the proportion of missing values excluding src_subject_id and eventname
+count_less_than_30_missing <- full_data %>%
+  rowwise() %>%
+  mutate(missing_prop = sum(is.na(across(-all_of(excluded_columns)))) / length(across(-all_of(excluded_columns)))) %>%
+  ungroup() %>%
+  filter(missing_prop < 0.30) %>%
+  summarise(count = n_distinct(src_subject_id))
+
+# Print the count for rows with less than 30% missing values
+print(count_less_than_30_missing)
+```
+
+# Descriptive statistics 
+
+## Functions
+```{r}
+# Function to calculate summary statistics
+summarize_demographics <- function(data) {
+  age_summary <- data %>%
+    summarise(mean_age = mean(demo_brthdat_v2, na.rm = TRUE),
+              sd_age = sd(demo_brthdat_v2, na.rm = TRUE))
+  
+  sex_summary <- data %>%
+    group_by(demo_sex_v2) %>%
+    summarise(count = n()) %>%
+    mutate(percentage = count / sum(count) * 100)
+  
+  gender_summary <- data %>%
+    group_by(demo_gender_id_v2) %>%
+    summarise(count = n()) %>%
+    mutate(percentage = count / sum(count) * 100)
+  
+  race_summary <- data %>%
+    group_by(race_ethnicity) %>%
+    summarise(count = n()) %>%
+    mutate(percentage = count / sum(count) * 100)
+  
+  # Summarize latent factors
+  latent_summary <- data %>%
+    summarise(mean_ses = mean(latent_factor_ss_general_ses, na.rm = TRUE),
+              sd_ses = sd(latent_factor_ss_general_ses, na.rm = TRUE),
+              mean_social = mean(latent_factor_ss_social, na.rm = TRUE),
+              sd_social = sd(latent_factor_ss_social, na.rm = TRUE),
+              mean_perinatal = mean(latent_factor_ss_perinatal, na.rm = TRUE),
+              sd_perinatal = sd(latent_factor_ss_perinatal, na.rm = TRUE))
+  
+  list(age = age_summary, sex = sex_summary, gender = gender_summary, race = race_summary, latent = latent_summary)
+}
+```
+
+## print demo 
+```{r}
+# Function to generate plots
+generate_demographic_plots <- function(summary_data, title_suffix) {
+  # Age Summary Plot
+  age_plot <- ggplot(data = summary_data$age, aes(x = 1, y = mean_age)) +
+    geom_bar(stat = "identity") +
+    geom_errorbar(aes(ymin = mean_age - sd_age, ymax = mean_age + sd_age), width = 0.2) +
+    labs(title = paste("Age Summary:", title_suffix), x = "Age", y = "Years") +
+    theme_minimal() +
+    scale_x_continuous(breaks = NULL)
+  
+  # Sex Summary Plot
+  sex_plot <- ggplot(data = summary_data$sex, aes(x = factor(demo_sex_v2), y = percentage, fill = factor(demo_sex_v2))) +
+    geom_bar(stat = "identity") +
+    labs(title = paste("Sex at Birth Distribution:", title_suffix), x = "Sex", y = "Percentage") +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  # Gender Identity Summary Plot
+  gender_plot <- ggplot(data = summary_data$gender, aes(x = factor(demo_gender_id_v2), y = percentage, fill = factor(demo_gender_id_v2))) +
+    geom_bar(stat = "identity") +
+    labs(title = paste("Gender Identity Distribution:", title_suffix), x = "Gender Identity", y = "Percentage") +
+    theme_minimal() +
+    theme(legend.position = "none") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Rotate x-axis text
+  
+  # Race Summary Plot
+  race_plot <- ggplot(data = summary_data$race, aes(x = reorder(race_ethnicity, -percentage), y = percentage)) +
+    geom_bar(stat = "identity", fill = "skyblue") +
+    coord_flip() +
+    labs(title = paste("Race Distribution:", title_suffix), x = "Race", y = "Percentage") +
+    theme_minimal()
+  
+  # Arrange demographic plots in a grid
+  grid.arrange(age_plot, sex_plot, gender_plot, race_plot, ncol = 2)
+}
+
+```
+
+```{r}
+
+
+```
+## Print latent variables
+```{r, echo: false}
+generate_latent_plots <- function(summary_data, title_suffix) {
+  # Latent Factor Plot for SES
+  ses_plot <- ggplot(data = summary$latent, aes(x = 1, y = mean_ses)) +
+    geom_bar(stat = "identity") +
+    geom_errorbar(aes(ymin = mean_ses - sd_ses, ymax = mean_ses + sd_ses), width = 0.2) +
+    labs(title = paste("SES Latent Factor:", title_suffix), x = "Factor", y = "SES Score") +
+    theme_minimal() +
+    scale_x_continuous(breaks = NULL)
+  
+  # Latent Factor Plot for Social
+  social_plot <- ggplot(data = summary_data$latent, aes(x = 1, y = mean_social)) +
+    geom_bar(stat = "identity") +
+    geom_errorbar(aes(ymin = mean_social - sd_social, ymax = mean_social + sd_social), width = 0.2) +
+    labs(title = paste("Social Latent Factor:", title_suffix), x = "Factor", y = "Social Score") +
+    theme_minimal() +
+    scale_x_continuous(breaks = NULL)
+  
+  # Latent Factor Plot for Perinatal
+  perinatal_plot <- ggplot(data = summary_data$latent, aes(x = 1, y = mean_perinatal)) +
+    geom_bar(stat = "identity") +
+    geom_errorbar(aes(ymin = mean_perinatal - sd_perinatal, ymax = mean_perinatal + sd_perinatal), width = 0.2) +
+    labs(title = paste("Perinatal Latent Factor:", title_suffix), x = "Factor", y = "Perinatal Score") +
+    theme_minimal() +
+    scale_x_continuous(breaks = NULL)
+  
+  # Arrange latent variable plots in a grid
+  grid.arrange(ses_plot, social_plot, perinatal_plot, ncol = 3)
+}
+
+```
+
+
+# DSM sample
+```{r}
+# Select DSM-5 T-score columns
+dsm_t_scores <- full_data %>%
+  select(cbcl_scr_dsm5_depress_t, cbcl_scr_dsm5_anxdisord_t, cbcl_scr_dsm5_somaticpr_t,
+         cbcl_scr_dsm5_adhd_t, cbcl_scr_dsm5_opposit_t, cbcl_scr_dsm5_conduct_t)
+
+# Calculate summary statistics
+summary_stats <- dsm_t_scores %>%
+  summarise_all(list(
+    Min = ~min(., na.rm = TRUE),
+    `1st Qu.` = ~quantile(., 0.25, na.rm = TRUE),
+    Median = ~median(., na.rm = TRUE),
+    Mean = ~mean(., na.rm = TRUE),
+    `3rd Qu.` = ~quantile(., 0.75, na.rm = TRUE),
+    Max = ~max(., na.rm = TRUE),
+    `NA's` = ~sum(is.na(.))
+  ))
+
+# Print the summary
+print(summary_stats)
+
+```
+
+Visualize data
+```{r}
+# Melt data to long format for ggplot2
+dsm_t_long <- dsm_t_scores %>%
+  pivot_longer(cols = everything(), names_to = "scale", values_to = "t_score")
+
+# Boxplot visualization
+ggplot(dsm_t_long, aes(x = scale, y = t_score)) +
+  geom_boxplot() +
+  labs(title = "Distribution of CBCL DSM-5 T-scores", x = "Scale", y = "T-Score") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+```{r}
+library(scipub)
+
+# Assuming a function in scipub to create tables called `create_table`
+# Note: Replace `create_table` with the actual function or methods available in scipub that formats publication-ready content.
+
+# For demonstration, print the table
+print(scipub::create_table(summary_stats))
+
+```
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+

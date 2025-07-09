@@ -1,0 +1,37 @@
+"0","
+##################### NO diagnosis group ###################
+# Add new columns to categorize the subjects
+all_ksads_diagnosis <- all_ksads_diagnosis %>%
+  mutate(
+    no_diagnosis = if_else(
+      ksads_11_917_p == 0 & adhd == 0 & any_bipolar == 0 & any_conduct_odd == 0 &
+      any_depressive_disorder == 0 & any_anxiety_disorder == 0 &
+      any_drug_use_disorder == 0 & any_eating_disorder == 0 & ptsd == 0 &
+      any_suicidality == 0, 1, 0
+    ),
+    only_ocd = if_else(
+      ksads_11_917_p == 1 & adhd == 0 & any_bipolar == 0 & any_conduct_odd == 0 &
+      any_depressive_disorder == 0 & any_anxiety_disorder == 0 &
+      any_drug_use_disorder == 0 & any_eating_disorder == 0 & ptsd == 0 &
+      any_suicidality == 0, 1, 0
+    )
+  )
+
+# Filter the subjects with no diagnosis
+no_diagnosis_group <- all_ksads_diagnosis %>%
+  filter(no_diagnosis == 1)
+
+# Filter the subjects with only OCD diagnosis
+only_ocd_group <- all_ksads_diagnosis %>%
+  filter(only_ocd == 1)
+
+# Check the results
+cat(""Number of subjects with no diagnosis:"", nrow(no_diagnosis_group), ""\n"")
+"
+"1","Number of subjects with no diagnosis:"
+"1"," "
+"1","8752"
+"1"," "
+"1","
+"
+"0","head(no_diagnosis_group)"

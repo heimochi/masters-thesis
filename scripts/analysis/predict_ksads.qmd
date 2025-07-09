@@ -1,0 +1,289 @@
+---
+title: "Predict ksdads"
+author: "MochiBear.Hei"
+date: "04.13.2025"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Data manipulation
+library(dplyr)
+library(tidyr)
+
+#models
+library(caret)
+library(xgboost)
+
+# Plotting
+library(ggplot2)
+library(viridis) 
+library(GGally)
+library(ROSE)
+
+# Utilities
+library(knitr)
+
+
+```
+
+# Load
+## ID list
+```{r}
+##list of people to include from flow script
+subids <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/subids.csv") %>%
+  select(src_subject_id, ksads_11_917_p) %>% #categorical diagnosis of ocd from ksads , 0 = no ocd current or present diagnosis
+  mutate(ksads_11_917_p = as.factor(ksads_11_917_p)) # convert to factor
+
+```
+
+## MRI
+```{r}
+mri <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/mri.csv") %>%
+  select (-smri_vol_scs_lesionlh, -smri_vol_scs_lesionrh, -smri_vol_scs_intracranialv) #have 4897 NA each + standardized by icv  
+
+full_dat <- inner_join(subids, mri, by = "src_subject_id")
+```
+
+
+# Handle NA
+```{r}
+na_counts <- colSums(is.na(full_dat))
+na_counts[na_counts > 0]  # print only columns with NA values
+
+# mean imputation: 
+full_dat <- full_dat %>%
+  mutate(across(c(mrisdp_508, mrisdp_527, mrisdp_582, mrisdp_601, mrisdp_602, mrisdp_603, mrisdp_604),
+                ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
+```
+
+# Split data
+```{r}
+set.seed(123) 
+
+# split the data (80/20)
+n <- nrow(full_dat)
+train_indices <- sample(1:n, size = round(0.8 * n))
+
+train_data <- full_dat[train_indices, ]  # 5009 of 200
+test_data <- full_dat[-train_indices, ]  # 1252 of 200
+
+str(train_data)
+train_data <- train_data %>% 
+  select(-src_subject_id)
+
+```
+
+# MODELS
+## xg(ksads_11_917_p)
+```{r}
+#highly imbalanced data
+balanced_data <- ROSE(ksads_11_917_p ~ ., data = train_data, seed = 123)$data
+
+# model matrix no intercepts 
+x_train <- model.matrix(ksads_11_917_p ~ ., balanced_data)[, -1]
+x_test <- model.matrix(ksads_11_917_p ~ ., test_data)[, -1]
+
+dtrain <- xgb.DMatrix(data = x_train, label = as.numeric(balanced_data$ksads_11_917_p) - 1)
+dtest <- xgb.DMatrix(data = x_test, label = as.numeric(test_data$ksads_11_917_p) - 1)
+
+
+param_grid <- expand.grid(
+  nrounds = c(50),       
+  max_depth = c(2, 7),        
+  min_child_weight = c(1), 
+  gamma = c(0.1),          
+  subsample = c(0.6 ),  
+  colsample_bytree = c(0.6, 0.8) 
+) 
+
+# Set up a tuning loop to evaluate each combination in the grid
+best_auc <- -Inf
+best_params <- NULL
+best_nrounds <- NULL 
+
+results_df <- data.frame()
+
+for (i in 1:nrow(param_grid)) {
+  params <- list(
+    booster = "gbtree",
+    objective = "binary:logistic",
+    eval_metric = "auc",
+    max_depth = param_grid$max_depth[i],
+    min_child_weight = param_grid$min_child_weight[i],
+    eta = 0.1,
+    gamma = param_grid$gamma[i],
+    subsample = param_grid$subsample[i],
+    colsample_bytree = param_grid$colsample_bytree[i],
+    scale_pos_weight = 4688 / 321,
+    nthread = 1
+  )
+  
+  cv_results <- xgb.cv(
+    params = params,
+    data = dtrain,
+    nfold = 5,
+    nrounds = param_grid$nrounds[i],
+    early_stopping_rounds = 10,
+    verbose = 0
+  )
+  
+  max_auc <- max(cv_results$evaluation_log$test_auc_mean)
+  best_round <- which.max(cv_results$evaluation_log$test_auc_mean)  # Capture this too
+  
+  results_df <- rbind(results_df, data.frame(
+  max_depth = param_grid$max_depth[i],
+  min_child_weight = param_grid$min_child_weight[i],
+  gamma = param_grid$gamma[i],
+  subsample = param_grid$subsample[i],
+  colsample_bytree = param_grid$colsample_bytree[i],
+  nrounds = param_grid$nrounds[i],
+  auc = max_auc,
+  best_round = best_round
+))
+
+  if (max_auc > best_auc) {
+    best_auc <- max_auc
+    best_params <- params
+    best_nrounds <- best_round  # Save the best number of rounds
+  }
+
+  rm(cv_results)
+  gc()
+}
+
+# Output the best AUC and the corresponding parameters
+cat("Best AUC:", best_auc, "\n")
+cat("Best Parameters:", "\n")
+print(best_params)
+cat("Best nrounds:", best_nrounds, "\n")
+
+
+# Save results to CSV
+write.csv(results_df, "ksads_hyperparameter_tuning_results.csv", row.names = FALSE)
+
+
+```
+
+```{r}
+# 7. Train the best model with the best hyperparameters
+bst <- xgb.train(
+  params = best_params,
+  data = dtrain,
+  nrounds = best_nrounds,
+  verbose = 1
+)
+
+# Probabilities
+pred_probs <- predict(bst, dtest)
+
+# Class predictions (threshold 0.5)
+pred_labels <- ifelse(pred_probs > 0.5, 1, 0)
+
+# Actual test labels
+true_labels <- getinfo(dtest, "label")
+```
+
+```{r}
+# Plot the distribution
+ggplot(subids, aes(x = ksads_11_917_p)) +
+  geom_bar(fill = "steelblue", color = "black") + 
+  labs(title = "Distribution of KSADS 11_917_P", 
+       x = "KSADS 11_917_P (0 = No OCD, 1 = Current Diagnosis)", 
+       y = "Count") +
+  theme_minimal()
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```

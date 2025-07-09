@@ -1,0 +1,4 @@
+"0","cat(""✅ Best multiclass log loss:"", best_mlogloss, ""\n"")
+"
+"2","Error: object 'best_mlogloss' not found
+"

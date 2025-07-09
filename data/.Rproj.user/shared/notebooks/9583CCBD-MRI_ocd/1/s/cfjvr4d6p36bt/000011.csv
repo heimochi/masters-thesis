@@ -1,0 +1,7 @@
+"0","icv_column <- ""smri_vol_scs_intracranialv"""
+"0",""
+"0","# divide brain areas by icv except for subject identifier and the ICV column"
+"0","subcortical <- subcortical %>%"
+"0","  mutate(across(!c(src_subject_id, icv_column), ~ .x / .data[[icv_column]]))"
+"0",""
+"0","head(subcortical)"

@@ -1,0 +1,7 @@
+"0","#save model
+xgb.save(final_model,  fname = ""/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_cbcl_e_model.model"")
+"
+"1","[1]"
+"1"," TRUE"
+"1","
+"

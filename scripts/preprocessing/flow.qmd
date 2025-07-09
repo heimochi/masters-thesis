@@ -1,0 +1,328 @@
+---
+title: "ABCD Flow of People"
+author: "MochiBear.Hei"
+date: "04.03.2025"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Data manipulation
+library(readr)
+library(dplyr)
+library(stringr)
+
+# Plotting
+library(ggplot2)
+library(naniar)
+library(tidyr)
+library(gridExtra)
+
+# Utilities
+library(knitr)
+
+```
+
+Diagnosis save subject list
+```{r}
+subids <- read.csv("/Users/maggieheimvik/Documents/LCBC/Data/ABCD/core/mental-health/mh_p_ksads_ss.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id, ksads_11_917_p)   # Present diagnosis OCD F42
+
+subids <- subids %>%
+  filter(!is.na(ksads_11_917_p))
+```
+have mri
+```{r}
+mri <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/mri.csv") %>%
+  select (-smri_vol_scs_lesionlh, -smri_vol_scs_lesionrh, -smri_vol_scs_intracranialv) #removed these columns because they have 4897 NA each
+
+# merge
+full_dat <- inner_join(mri, subids, by = "src_subject_id")
+```
+
+## Quality control of images 
+```{r}
+qc <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/imaging/mri_y_qc_incl.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id, imgincl_t1w_include) %>%
+  distinct(src_subject_id, .keep_all = TRUE)
+
+full_dat <- inner_join(full_dat, qc, by = "src_subject_id")
+```
+
+1 = include: The data is recommended for inclusion.
+0 = exclude: The data does not meet the recommended criteria for inclusion.
+```{r}
+#remove those with imgincl_t1w_include = 0
+full_dat <- full_dat %>%
+  filter(imgincl_t1w_include == 1)
+
+```
+
+have bpm
+```{r}
+bpm <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_y_bpm.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id, bpm_y_scr_internal_t) %>%
+  distinct(src_subject_id, .keep_all = TRUE) %>% #remove duplicates
+  mutate(across(c(bpm_y_scr_internal_t), ~ as.numeric(scale(.)))) #standardize
+
+# merge
+full_dat <- inner_join(full_dat, bpm, by = "src_subject_id")
+```
+
+have cbcl
+```{r}
+cbcl <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/mental-health/mh_p_cbcl.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(
+    src_subject_id,cbcl_scr_syn_internal_t, cbcl_scr_syn_totprob_t
+  ) %>%
+  distinct(src_subject_id, .keep_all = TRUE) %>% # remove duplicates
+  mutate(across(c(cbcl_scr_syn_internal_t,  cbcl_scr_syn_totprob_t), ~ as.numeric(scale(.)))) # standardize scores
+
+# merge
+full_dat <- inner_join(full_dat, cbcl, by = "src_subject_id")
+```
+
+missingness
+```{r}
+na_counts <- colSums(is.na(full_dat))
+na_counts[na_counts > 0]  # print only columns with NA values
+
+
+# mean imputation: 
+full_dat <- full_dat %>%
+  mutate(across(c(mrisdp_508, mrisdp_527,    mrisdp_567, mrisdp_582, mrisdp_601, mrisdp_602, mrisdp_603, mrisdp_604),
+                #  bpm_y_scr_internal_t,
+                ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
+
+full_dat <- full_dat %>%
+  filter(rowSums(is.na(select(., bpm_y_scr_internal_t))) == 0)
+```
+
+#medication
+```{r}
+antipsychotics <- c("Risperidone", "Aripiprazole", "Olanzapine", "Quetiapine", "Haloperidol", 
+                    "Ziprasidone", "Clozapine", "Lurasidone", "Paliperidone")
+
+antidepressants <- c("Fluoxetine", "Sertraline", "Citalopram", "Escitalopram", "Paroxetine", 
+                     "Bupropion", "Duloxetine", "Venlafaxine", "Desvenlafaxine", "Amitriptyline")
+
+# list of med columns in csv 
+med_cols <- paste0("med", 1:15, "_rxnorm_p")
+
+medication <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/physical-health/ph_p_meds.csv") %>%
+  select(src_subject_id, eventname, all_of(med_cols)) %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  distinct(src_subject_id, .keep_all = TRUE)
+```
+
+```{r}
+# make two new boolean columns 
+medication$uses_antipsychotic <- apply(medication[, med_cols], 1, function(row) {
+  any(sapply(antipsychotics, function(drug) grepl(drug, row, ignore.case = TRUE)))
+})
+medication$uses_antidepressant <- apply(medication[, med_cols], 1, function(row) {
+  any(sapply(antidepressants, function(drug) grepl(drug, row, ignore.case = TRUE)))
+})
+
+#check
+summary(medication$uses_antipsychotic)
+summary(medication$uses_antidepressant)
+
+#keep only the boolean columns 
+medication <- medication %>%
+  select(src_subject_id, uses_antipsychotic, uses_antidepressant)
+```
+
+remove those in analysis dataset using medication
+```{r}
+full_dat <- inner_join(full_dat, medication, by = "src_subject_id")
+
+# Remove rows from full_dat where participants are using antipsychotics or antidepressants
+full_dat <- full_dat[!(full_dat$uses_antipsychotic == TRUE | full_dat$uses_antidepressant == TRUE), ]
+```
+
+#refresh 
+# OCD 0 or 1
+```{r}
+final_data <- full_dat %>%
+  select(
+    src_subject_id, ksads_11_917_p
+  )
+  
+```
+
+
+In healthy group keep only those that do not have any comorbidities
+Healthy vs OCD
+```{r}
+# Load additional comorbidities data
+all_ksads_diagnosis <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/comorbidities.csv") %>%
+  select(
+    src_subject_id,
+    adhd,
+    any_bipolar,
+    any_conduct_odd,
+    any_depressive_disorder,
+    any_anxiety_disorder,
+    any_drug_use_disorder,
+    any_eating_disorder,
+    ptsd,
+    any_suicidality,
+    no_diagnosis,
+    only_ocd,
+    comorbidities
+  ) 
+
+# merge
+final_data <- inner_join(final_data, all_ksads_diagnosis, by = "src_subject_id")
+
+# Filter out those with ksads_11_917_p = 0 and comorbidities > 0
+final_data <- final_data %>%
+  filter(!(ksads_11_917_p == 0 & comorbidities > 0))
+# Count for people with OCD (ksads_11_917_p = 1)
+ocd_summary <- final_data %>%
+  filter(ksads_11_917_p == 1) %>%
+  summarise(
+    count_with_comorbidities = sum(comorbidities > 0),
+    count_without_comorbidities = sum(comorbidities == 0)
+  )
+
+# Count for people without OCD (ksads_11_917_p = 0)
+non_ocd_summary <- final_data %>%
+  filter(ksads_11_917_p == 0) %>%
+  summarise(
+    count_with_comorbidities = sum(comorbidities > 0),
+    count_without_comorbidities = sum(comorbidities == 0)
+  )
+
+# Print the summaries
+cat("OCD Diagnosis Summary:\n")
+cat("Count of OCD (ksads_11_917_p = 1) with comorbidities > 0:", ocd_summary$count_with_comorbidities, "\n")
+cat("Count of OCD (ksads_11_917_p = 1) with comorbidities = 0:", ocd_summary$count_without_comorbidities, "\n")
+
+cat("\nNon-OCD Diagnosis Summary:\n")
+cat("Count of Non-OCD (ksads_11_917_p = 0) with comorbidities > 0:", non_ocd_summary$count_with_comorbidities, "\n")
+cat("Count of Non-OCD (ksads_11_917_p = 0) with comorbidities = 0:", non_ocd_summary$count_without_comorbidities, "\n")
+```
+
+
+#save for analysis 
+```{r}
+final_data <- final_data %>%
+  select(src_subject_id, ksads_11_917_p, no_diagnosis, only_ocd, comorbidities)
+
+
+write.csv(final_data, "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/subids.csv", row.names = FALSE)
+```
+
+#save for demogrpahics
+```{r}
+full_dat <- full_dat %>%
+  select(
+    src_subject_id
+  )
+write.csv(full_dat, "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/demo_subid.csv", row.names = FALSE)
+```
+
+
+}
+which src_subj are using meds
+```{r}
+#find
+antipsychotic_users <- which(medication$uses_antipsychotic == TRUE)
+antidepressant_users <- which(medication$uses_antidepressant == TRUE)
+
+# View 
+antipsychotic_details <- medication[antipsychotic_users, c("src_subject_id", med_cols)]
+antidepressant_details <- medication[antidepressant_users, c("src_subject_id", med_cols)]
+
+# Print 
+print("Participants using antipsychotics:")
+print(antipsychotic_details)
+
+print("Participants using antidepressants:")
+print(antidepressant_details)
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+

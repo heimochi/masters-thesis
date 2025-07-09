@@ -1,0 +1,5 @@
+"0","final_data <- final_data %>%"
+"0","  select(src_subject_id, ksads_11_917_p, no_diagnosis, only_ocd, comorbidities)"
+"0",""
+"0",""
+"0","write.csv(final_data, ""/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/subids.csv"", row.names = FALSE)"

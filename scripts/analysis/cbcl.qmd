@@ -1,0 +1,313 @@
+---
+title: "Child behavior checklist"
+author: "MochiBear.Hei"
+date: "12.16.2024"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Data manipulation
+library(dplyr)
+library(tidyr)
+
+# Plotting
+library(ggplot2)
+
+# Utilities
+library(knitr)
+```
+
+
+```{r}
+p_data <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/mental-health/mh_p_cbcl.csv")
+
+```
+Keep the relevant time points
+```{r}
+p_data <- p_data %>%
+  filter(eventname == "2_year_follow_up_y_arm_1")
+```
+
+
+# Calculate OCS score (Obsessive-Compulsive score)
+```{r}
+# Calculate the OCS score for each participant
+p_data <- p_data %>%
+  rowwise() %>%  # Ensures calculations are done row-by-row
+  mutate(
+    raw_score = sum(c_across(c(cbcl_q09_p, cbcl_q31_p, cbcl_q32_p, cbcl_q52_p, cbcl_q66_p, cbcl_q84_p, cbcl_q85_p, cbcl_q112_p)), na.rm = TRUE),  # Sum of scores for the 8 items
+    max_possible_score = sum(!is.na(c_across(c(cbcl_q09_p, cbcl_q31_p, cbcl_q32_p, cbcl_q52_p, cbcl_q66_p, cbcl_q84_p, cbcl_q85_p, cbcl_q112_p)))) * 2,  # Maximum score based on answered items
+    ocs_score = raw_score / max_possible_score  # Normalized OCS score
+  ) %>%
+  ungroup()  # Removes rowwise grouping
+
+# View the resulting DataFrame with raw scores, max possible scores, and normalized OCS scores
+print(p_data)
+
+```
+
+# Keep only necessary variables (t-scores and OCS scores )
+```{r}
+
+# Extract column names that end with "_t"
+t_score_columns <- grep("_t$", names(p_data), value = TRUE)
+
+# Print the extracted column names
+print(t_score_columns)
+
+p_data <- p_data %>%
+  select(
+    src_subject_id,
+    cbcl_scr_syn_anxdep_t, 
+    cbcl_scr_syn_withdep_t, 
+    cbcl_scr_syn_somatic_t, 
+    cbcl_scr_syn_social_t,
+    cbcl_scr_syn_thought_t, 
+    cbcl_scr_syn_attention_t, 
+    cbcl_scr_syn_rulebreak_t, 
+    cbcl_scr_syn_internal_t, 
+    cbcl_scr_syn_external_t, 
+    cbcl_scr_syn_totprob_t, 
+    cbcl_scr_dsm5_depress_t, 
+    cbcl_scr_dsm5_anxdisord_t, 
+    cbcl_scr_dsm5_somaticpr_t, 
+    cbcl_scr_dsm5_adhd_t, 
+    cbcl_scr_dsm5_opposit_t, 
+    cbcl_scr_dsm5_conduct_t, 
+    cbcl_scr_07_sct_t, 
+    cbcl_scr_07_ocd_t, 
+    cbcl_scr_07_stress_t, 
+    ocs_score
+  )
+
+
+```
+
+# Check missingness
+```{r}
+
+# Replace blank strings with NA to maintain uniformity in missing values
+p_data[p_data == ""] <- NA
+
+# Define columns to exclude from the NA calculations
+excluded_columns <- c("src_subject_id")
+
+# Calculate the proportion of missing values per row, excluding specified columns
+p_data <- p_data %>%
+  rowwise() %>%
+  mutate(missing_prop = sum(is.na(across(-all_of(excluded_columns)))) / length(across(-all_of(excluded_columns)))) %>%
+  ungroup()
+
+# Filter out rows with more than 30% missing values
+p_data <- p_data %>%
+  filter(missing_prop < 0.30) %>%
+  select(-missing_prop) # Remove the intermediate 'missing_prop' column
+
+# Count number of unique 'src_subject_id' where none of the columns (excluding specified ones) are NA
+count_all_non_missing <- p_data %>%
+  filter(across(-all_of(excluded_columns), ~ !is.na(.))) %>%
+  summarise(count = n_distinct(src_subject_id))
+
+# Print the count for rows with no missing values
+print(count_all_non_missing)
+
+# Calculate the number of unique 'src_subject_id' with less than 30% missing values
+count_less_than_30_missing <- p_data %>%
+  summarise(count = n_distinct(src_subject_id))
+
+# Print the count for rows with less than 30% missing values
+print(count_less_than_30_missing)
+
+```
+
+Plot the distributions
+```{r}
+# Select `scr_syn` columns
+scr_syn_cols <- p_data %>%
+  select(
+    starts_with("cbcl_scr_syn_"),  # Select all columns starting with "cbcl_scr_syn_"
+    cbcl_scr_07_sct_t,             # Manually include "cbcl_scr_07_sct_t"
+    cbcl_scr_07_ocd_t,             # Manually include "cbcl_scr_07_ocd_t"
+    cbcl_scr_07_stress_t          # Manually include "cbcl_scr_07_stress_t"
+  ) %>%
+  pivot_longer(
+    cols = everything(),           # Select all columns for pivoting
+    names_to = "score_type",        # Create a column for score types
+    values_to = "t_score"           # Create a column for T-score values
+  )
+
+# Plot scr_syn columns
+ggplot(scr_syn_cols, aes(x = score_type, y = t_score, fill = score_type)) +
+  geom_boxplot(alpha = 0.7) +
+  theme_minimal() +
+  labs(
+    title = "Distribution of T-Scores for scr_syn Variables",
+    x = "Score Type",
+    y = "T-Score",
+    fill = "Score Type"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Select `dsm5` columns
+dsm5_cols <- p_data %>%
+  select(starts_with("cbcl_scr_dsm5_")) %>%
+  pivot_longer(
+    cols = everything(),  # Select all columns
+    names_to = "score_type",  # Column for score type
+    values_to = "t_score"     # Column for T-scores
+  )
+
+# Plot dsm5 columns
+ggplot(dsm5_cols, aes(x = score_type, y = t_score, fill = score_type)) +
+  geom_boxplot(alpha = 0.7) +
+  theme_minimal() +
+  labs(
+    title = "Distribution of T-Scores for dsm5 Variables",
+    x = "Score Type",
+    y = "T-Score",
+    fill = "Score Type"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+Plot OCD
+```{r}
+# Select relevant OCD, externalizing, and internalizing columns from p_data
+p_data_long <- p_data %>%
+  select(
+    cbcl_scr_07_ocd_t,          # OCD variables
+    ocs_score,
+    cbcl_scr_syn_external_t,    # Externalizing variables
+    cbcl_scr_syn_rulebreak_t,
+    cbcl_scr_syn_internal_t,    # Internalizing variables
+    cbcl_scr_syn_anxdep_t,
+    cbcl_scr_syn_withdep_t
+  ) %>%
+  pivot_longer(
+    cols = everything(),         # Pivot all selected columns
+    names_to = "score_type",      # Create a column for score types
+    values_to = "t_score"         # Create a column for T-scores
+  ) %>%
+  mutate(
+    # Categorize the score types into OCD, Externalizing, and Internalizing
+    category = case_when(
+      score_type %in% c("cbcl_scr_07_ocd_t", "ocs_score") ~ "OCD",
+      score_type %in% c("cbcl_scr_syn_external_t", "cbcl_scr_syn_rulebreak_t") ~ "Externalizing",
+      score_type %in% c("cbcl_scr_syn_internal_t", "cbcl_scr_syn_anxdep_t", "cbcl_scr_syn_withdep_t") ~ "Internalizing",
+      TRUE ~ "Other"
+    )
+  )
+
+# Plot for OCD, Externalizing, and Internalizing categories
+ggplot(p_data_long, aes(x = score_type, y = t_score, fill = category)) +
+  geom_boxplot(alpha = 0.7) +   # Use boxplot to show the distribution
+  theme_minimal() +
+  labs(
+    title = "Distribution of T-Scores for OCD, Externalizing, and Internalizing Variables",
+    x = "Score Type",
+    y = "T-Score",
+    fill = "Category"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+# Save as csv
+```{r}
+write.csv(p_data, "/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/OCD/p_data.csv", row.names = FALSE)
+```
+
+# Keep only necessary variables (t-scores and OCS scores )
+```{r}
+p_data <- p_data %>%
+  select(
+    src_subject_id,
+    cbcl_scr_syn_attention_t, 
+    cbcl_scr_syn_internal_t, 
+    cbcl_scr_syn_external_t, 
+    cbcl_scr_syn_totprob_t, 
+    cbcl_scr_07_ocd_t, 
+    ocs_score
+  )
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+

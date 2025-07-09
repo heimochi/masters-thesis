@@ -1,0 +1,1013 @@
+---
+title: "Analysis"
+author: "MochiBear.Hei"
+date: "03.20.2025"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Data manipulation
+library(dplyr)
+library(tidyr)
+
+#models
+library(caret)
+library(xgboost)
+
+# Plotting
+library(ggplot2)
+
+# Utilities
+library(knitr)
+```
+
+# load
+```{r}
+subids <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/src_subject_id.csv")
+
+mri <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/mri.csv") %>%
+  select (-smri_vol_scs_lesionlh, -smri_vol_scs_lesionrh) #removed these columns because they have 4897 NA each
+
+#merge
+full_dat <- mri[mri$src_subject_id %in% subids$src_subject_id, ]
+```
+
+```{r}
+bpm <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_y_bpm.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id, bpm_y_scr_internal_t, bpm_y_scr_external_t, bpm_y_scr_totalprob_t) %>%
+  distinct(src_subject_id, .keep_all = TRUE) %>% #remove duplicates
+  mutate(across(c(bpm_y_scr_internal_t, bpm_y_scr_external_t, bpm_y_scr_totalprob_t), ~ as.numeric(scale(.)))) #standardize
+
+# merge
+full_dat <- inner_join(full_dat, bpm, by = "src_subject_id")
+```
+
+CBCL Internalizing, Externalizing, and Total Problem scales have a full T-score range with a mean = 50 and SD = 10
+```{r}
+cbcl <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/mental-health/mh_p_cbcl.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(
+    src_subject_id,cbcl_scr_syn_internal_t, cbcl_scr_syn_external_t, cbcl_scr_syn_totprob_t
+  ) %>%
+  distinct(src_subject_id, .keep_all = TRUE) %>% # remove duplicates
+  mutate(across(c(cbcl_scr_syn_internal_t, cbcl_scr_syn_external_t, cbcl_scr_syn_totprob_t), ~ as.numeric(scale(.)))) # standardize scores
+
+# merge
+full_dat <- inner_join(full_dat, cbcl, by = "src_subject_id")
+```
+
+
+
+-------- include demo?
+demo <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis//Data/core/abcd-general/abcd_p_demo.csv") %>%
+  filter(eventname == "baseline_year_1_arm_1") %>%
+  select(src_subject_id, demo_sex_v2, race_ethnicity, demo_brthdat_v2)
+
+# merge
+full_dat <- inner_join(full_dat, demo, by = "src_subject_id")
+
+--------
+
+
+-------- extract ids for demographics 
+
+full_dat <- full_dat %>%
+  select(
+    src_subject_id,
+  )
+write.csv(full_dat, "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/full.csv", row.names = FALSE)
+
+--------
+
+missingness
+```{r}
+na_counts <- colSums(is.na(full_dat))
+na_counts[na_counts > 0]  # print only columns with NA values
+
+
+# mean imputation: 
+full_dat <- full_dat %>%
+  mutate(across(c(mrisdp_508, mrisdp_527,    mrisdp_567, mrisdp_582, mrisdp_601, mrisdp_602, mrisdp_603, mrisdp_604,
+                  bpm_y_scr_internal_t, bpm_y_scr_external_t, bpm_y_scr_totalprob_t),
+                ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
+
+```
+
+# Split data: test and training
+```{r}
+set.seed(123)  
+
+# Split the data into training and test sets (70/30)
+n <- nrow(full_dat)
+train_indices <- sample(1:n, size = round(0.7 * n))
+
+train_data <- full_dat[train_indices, ]  #4897 of 205
+test_data <- full_dat[-train_indices, ] #2099 of 205
+```
+
+#lm
+## lm(bpm_internal ~ mri)
+```{r}
+lm_model <- lm(bpm_y_scr_internal_t ~ 
+               mrisdp_454 + mrisdp_455 + mrisdp_456 + mrisdp_457 + mrisdp_458 + mrisdp_459 + 
+               mrisdp_460 + mrisdp_461 + mrisdp_462 + mrisdp_463 + mrisdp_464 +
+               mrisdp_465 + mrisdp_466 + mrisdp_467 + mrisdp_468 + mrisdp_469 + 
+               mrisdp_470 + mrisdp_471 + mrisdp_472 + mrisdp_473 + mrisdp_474 +
+               mrisdp_475 + mrisdp_476 + mrisdp_477 + mrisdp_478 + mrisdp_479 + 
+               mrisdp_480 + mrisdp_481 + mrisdp_482 + mrisdp_483 + mrisdp_484 +
+               mrisdp_485 + mrisdp_486 + mrisdp_487 + mrisdp_488 + mrisdp_489 + 
+               mrisdp_490 + mrisdp_491 + mrisdp_492 + mrisdp_493 + mrisdp_494 +
+               mrisdp_495 + mrisdp_496 + mrisdp_497 + mrisdp_498 + mrisdp_499 + 
+               mrisdp_500 + mrisdp_501 + mrisdp_502 + mrisdp_503 + mrisdp_504 +
+               mrisdp_505 + mrisdp_506 + mrisdp_507 + mrisdp_508 + mrisdp_509 + 
+               mrisdp_510 + mrisdp_511 + mrisdp_512 +
+               smri_vol_scs_cbwmatterlh + smri_vol_scs_ltventriclelh + smri_vol_scs_inflatventlh + 
+               smri_vol_scs_crbwmatterlh + smri_vol_scs_crbcortexlh + smri_vol_scs_tplh + 
+               smri_vol_scs_caudatelh + smri_vol_scs_putamenlh + smri_vol_scs_pallidumlh + 
+               smri_vol_scs_3rdventricle + smri_vol_scs_4thventricle + smri_vol_scs_bstem + 
+               smri_vol_scs_hpuslh + smri_vol_scs_amygdalalh + smri_vol_scs_csf + 
+               smri_vol_scs_aal + smri_vol_scs_vedclh +
+               smri_vol_scs_cbwmatterrh + smri_vol_scs_ltventriclerh + smri_vol_scs_inflatventrh + 
+               smri_vol_scs_crbwmatterrh + smri_vol_scs_crbcortexrh + smri_vol_scs_tprh + 
+               smri_vol_scs_caudaterh + smri_vol_scs_putamenrh + smri_vol_scs_pallidumrh + 
+               smri_vol_scs_hpusrh + smri_vol_scs_amygdalarh + 
+               smri_vol_scs_aar + smri_vol_scs_vedcrh + smri_vol_scs_wmhint + smri_vol_scs_wmhintlh + 
+               smri_vol_scs_wmhintrh + smri_vol_scs_ccps + smri_vol_scs_ccmidps + 
+               smri_vol_scs_ccct + smri_vol_scs_ccmidat + smri_vol_scs_ccat +
+               smri_vol_scs_wholeb + smri_vol_scs_latventricles + smri_vol_scs_allventricles +
+               smri_vol_scs_intracranialv + smri_vol_scs_suprateialv + smri_vol_scs_subcorticalgv,
+             data = train_data)
+
+summary(lm_model)
+```
+
+--------lm(bpm_internal ~ mri + demo)
+
+lm_model <- lm(bpm_y_scr_internal_t ~ demo_sex_v2 + race_ethnicity + demo_brthdat_v2 +
+               mrisdp_454 + mrisdp_455 + mrisdp_456 + mrisdp_457 + mrisdp_458 + mrisdp_459 + 
+               mrisdp_460 + mrisdp_461 + mrisdp_462 + mrisdp_463 + mrisdp_464 +
+               mrisdp_465 + mrisdp_466 + mrisdp_467 + mrisdp_468 + mrisdp_469 + 
+               mrisdp_470 + mrisdp_471 + mrisdp_472 + mrisdp_473 + mrisdp_474 +
+               mrisdp_475 + mrisdp_476 + mrisdp_477 + mrisdp_478 + mrisdp_479 + 
+               mrisdp_480 + mrisdp_481 + mrisdp_482 + mrisdp_483 + mrisdp_484 +
+               mrisdp_485 + mrisdp_486 + mrisdp_487 + mrisdp_488 + mrisdp_489 + 
+               mrisdp_490 + mrisdp_491 + mrisdp_492 + mrisdp_493 + mrisdp_494 +
+               mrisdp_495 + mrisdp_496 + mrisdp_497 + mrisdp_498 + mrisdp_499 + 
+               mrisdp_500 + mrisdp_501 + mrisdp_502 + mrisdp_503 + mrisdp_504 +
+               mrisdp_505 + mrisdp_506 + mrisdp_507 + mrisdp_508 + mrisdp_509 + 
+               mrisdp_510 + mrisdp_511 + mrisdp_512 +
+               smri_vol_scs_cbwmatterlh + smri_vol_scs_ltventriclelh + smri_vol_scs_inflatventlh + 
+               smri_vol_scs_crbwmatterlh + smri_vol_scs_crbcortexlh + smri_vol_scs_tplh + 
+               smri_vol_scs_caudatelh + smri_vol_scs_putamenlh + smri_vol_scs_pallidumlh + 
+               smri_vol_scs_3rdventricle + smri_vol_scs_4thventricle + smri_vol_scs_bstem + 
+               smri_vol_scs_hpuslh + smri_vol_scs_amygdalalh + smri_vol_scs_csf + 
+               smri_vol_scs_aal + smri_vol_scs_vedclh +
+               smri_vol_scs_cbwmatterrh + smri_vol_scs_ltventriclerh + smri_vol_scs_inflatventrh + 
+               smri_vol_scs_crbwmatterrh + smri_vol_scs_crbcortexrh + smri_vol_scs_tprh + 
+               smri_vol_scs_caudaterh + smri_vol_scs_putamenrh + smri_vol_scs_pallidumrh + 
+               smri_vol_scs_hpusrh + smri_vol_scs_amygdalarh + 
+               smri_vol_scs_aar + smri_vol_scs_vedcrh + smri_vol_scs_wmhint + smri_vol_scs_wmhintlh + 
+               smri_vol_scs_wmhintrh + smri_vol_scs_ccps + smri_vol_scs_ccmidps + 
+               smri_vol_scs_ccct + smri_vol_scs_ccmidat + smri_vol_scs_ccat +
+               smri_vol_scs_wholeb + smri_vol_scs_latventricles + smri_vol_scs_allventricles +
+               smri_vol_scs_intracranialv + smri_vol_scs_suprateialv + smri_vol_scs_subcorticalgv,
+             data = train_data)
+
+summary(lm_model)
+
+--------
+
+
+# XGBoost
+
+Manual tuning resources
+https://www.analyticsvidhya.com/blog/2016/03/complete-guide-parameter-tuning-xgboost-with-codes-python/#h-step-1-fix-learning-rate-and-number-of-estimators-for-tuning-tree-based-parameters
+https://www.kaggle.com/code/prashant111/a-guide-on-xgboost-hyperparameters-tuning#5.-Results-and-Conclusion-
+
+Prepare dataset if demo is included: One hot encoding script in file called xgBoost_1.qmd
+
+##xg(bpm_internal)
+
+1. Initial Setup
+```{r}
+target <- "bpm_y_scr_internal_t"  
+predictors <- colnames(full_dat)[!colnames(full_dat) %in% c("src_subject_id","cbcl_scr_syn_internal_t", "bpm_y_scr_external_t",       "bpm_y_scr_totalprob_t", "cbcl_scr_syn_external_t", "cbcl_scr_syn_totprob_t", target)]  
+
+#print(predictors)
+# Convert to matrix for XGBoost
+dtrain <- xgb.DMatrix(data = as.matrix(train_data[, predictors]), label = train_data[[target]])
+dtest <- xgb.DMatrix(data = as.matrix(test_data[, predictors]), label = test_data[[target]])
+```
+
+2. Set initial values 
+
+This will involve using XGBoost’s xgb.cv function to determine the optimal number of trees first, and then applying grid search for tuning other parameters.
+
+parameters we set in the meeting:
+param_grid <- expand.grid(
+nrounds = c(100, 300), # Number of boosting rounds
+max_depth = c(2, 7, 15), # Maximum depth of a tree
+eta = c(0.3, 0.1), # Learning rate
+lambda = c(0.1, 1, 10) #regularization ====== Doesnt let me run lambda, not part of default xgboost package
+)
+
+eta = 0.3 nround best = 13
+eta = 0.2 nround best = 18
+eta = 0.1 nround best = 59
+eta = 0.05 nround best = 152 or 213 or 52 why keep change even tho i set the seed 
+
+```{r}
+# Set initial parameters for the model
+xgb_params <- list(
+  objective = "reg:squarederror",                               # log loss function to minimize is set to regression with squared loss
+  eval_metric = "rmse",                                         # primary eval_metric to guide model training
+  eta = 0.05,                                                   # start high (0.1 works, but somewhere 0.05-0.3), will test other etas later
+  max_depth = 5,                                                # Start with 5, to be tuned (somehwere 3-10)
+  min_child_weight = 1,                                         # To be tuned: smaller value is chosen because it is a highly imbalanced class                                                                    problem, and leaf nodes can have smaller size groups
+  subsample = 0.8,
+  colsample_bytree = 0.8,                                       # These two : typical values range between 0.5-0.9.
+  scale_pos_weight = 1,                                         # Because of high-class imbalance.
+  seed = 1
+)
+
+# CV to find best nrounds
+cv_model <- xgb.cv(
+  params = xgb_params,
+  data = dtrain,
+  nrounds = 1000,
+  nfold = 5,
+  showsd = TRUE,
+  stratified = FALSE,
+  print_every_n = 10,
+  early_stopping_rounds = 50,                                  # Stop early if no improvement
+  maximize = FALSE
+)
+
+# print best nround
+best_nrounds <- cv_model$best_iteration
+print(paste("Optimal number of rounds: ", best_nrounds))
+
+```
+3. Tune tree specific parameters 
+
+We tune max_depth and min_child_weight first because they have the highest impact on the model outcome. To start with, let’s set wider ranges, and then we will perform another iteration for smaller ranges.
+
+max_depth:
+Controls the maximum depth of each tree. Increasing max_depth can help capture complex patterns but may also lead to over fitting. Lower values can prevent over fitting but might oversimplify the model.
+
+min_child_weight:
+Controls the minimum sum of instance weight needed in a child node. This parameter helps prevent over fitting by making it more difficult for leaf nodes to learn from small amounts of data.
+
+We will tune them using a grid 
+```{r}
+# Setting up tuning grid
+tune_grid <- expand.grid(
+  nrounds = best_nrounds,
+  max_depth = seq(2, 7, 15),
+  min_child_weight = seq(1, 6, 2),
+  eta = 0.1,
+  gamma = 0,                                                # will tune later
+  colsample_bytree = 0.8,                                   # will tune later
+  subsample = 0.8                                           # will tune later
+)
+
+# TrainControl for caret
+train_control <- trainControl(
+  method = "cv",
+  number = 5,
+  verboseIter = TRUE
+)
+
+# Train using caret
+caret_model <- train(
+  x = train_data[, predictors, drop = FALSE],   # Ensure this returns a dataframe/matrix
+  y = train_data[[target]],                     # This should return a vector
+  method = "xgbTree",
+  tuneGrid = tune_grid,
+  trControl = train_control,
+  metric = "RMSE"
+)
+
+# View best parameters
+print(caret_model$bestTune)
+
+```
+4. Tune regularization parameters 
+
+Once optimal max_depth and min_child_weight are found, tune gamma, subsample, and colsample_bytree.
+
+```{r}
+# Define new tuning grid
+gamma_grid <- expand.grid(
+  nrounds = best_nrounds,
+  max_depth = caret_model$bestTune$max_depth,
+  min_child_weight = caret_model$bestTune$min_child_weight,
+  eta = 0.1,
+  gamma = seq(0, 0.5, 0.1),
+  colsample_bytree = 0.8,
+  subsample = 0.8
+)
+
+# Train again
+caret_model_2 <- train(
+  x = train_data[, predictors, drop = FALSE],   # Ensure this returns a dataframe/matrix
+  y = train_data[[target]],                     # This should return a vector
+  method = "xgbTree",
+  tuneGrid = gamma_grid,
+  trControl = train_control,
+  metric = "RMSE"
+)
+
+# Check the best parameters again
+print(caret_model_2$bestTune)
+
+```
+
+5. Regularization and Final Model
+
+Finally, you can fine-tune alpha and lambda for regularization.
+```{r}
+# Tuning regularization parameters
+reg_grid <- expand.grid(
+  nrounds = best_nrounds,
+  max_depth = caret_model_2$bestTune$max_depth,
+  min_child_weight = caret_model_2$bestTune$min_child_weight,
+  eta = 0.1,
+  gamma = caret_model_2$bestTune$gamma,
+  subsample = caret_model_2$bestTune$subsample,
+  colsample_bytree = caret_model_2$bestTune$colsample_bytree
+)
+
+caret_model_3 <- train(
+  x = train_data[, predictors, drop = FALSE],   # Ensure this returns a dataframe/matrix
+  y = train_data[[target]],                     # This should return a vector
+  method = "xgbTree",
+  tuneGrid = reg_grid,
+  trControl = train_control,
+  metric = "RMSE"
+)
+
+# Best parameters from all the tuning
+print(caret_model_3$bestTune)
+
+# Here, reduce learning rate and increase nrounds if needed
+
+```
+
+
+Post-training evaluate performance metrics:
+```{r}
+# Make predictions on test set
+predictions <- predict(caret_model_3, newdata = test_data[, predictors])
+
+################################### Post-training evaluate performance metrics
+
+# Calculate MAE, R-squared, and correlation coefficient post-training
+actual_values <- test_data[[target]]
+
+# MAE calculation
+mae <- mean(abs(predictions - actual_values))
+
+# R-squared calculation
+rsq <- cor(predictions, actual_values)^2
+
+# Correlation coefficient
+correlation <- cor(predictions, actual_values)
+
+# RMSE calculation
+rmse <- sqrt(mean((predictions - actual_values)^2))
+
+# Display the results
+cat("MAE: ", mae, "\n")
+cat("R-squared: ", rsq, "\n")
+cat("Correlation Coefficient: ", correlation, "\n")
+cat("RMSE: ", rmse, "\n")
+```
+
+
+## xg(cbcl_internal)
+```{r}
+######################################## 1. Initial Setup
+# define predictors and target
+target <- "cbcl_scr_syn_internal_t" 
+predictors <- colnames(full_dat)[!colnames(full_dat) %in% c("src_subject_id","bpm_y_scr_internal_t", "bpm_y_scr_external_t", "bpm_y_scr_totalprob_t", "cbcl_scr_syn_external_t", "cbcl_scr_syn_totprob_t", target)]  
+
+#print(predictors)
+# Convert to matrix for XGBoost
+dtrain <- xgb.DMatrix(data = as.matrix(train_data[, predictors]), label = train_data[[target]])
+dtest <- xgb.DMatrix(data = as.matrix(test_data[, predictors]), label = test_data[[target]])
+
+######################################## 2. Set initial values 
+
+# initial parameters for model
+xgb_params <- list(
+  objective = "reg:squarederror",                              
+  eval_metric = "rmse",                                       
+  eta = 0.05,                                                 
+  max_depth = 5,                                              
+  min_child_weight = 1,                                                                                                 
+  subsample = 0.8,
+  colsample_bytree = 0.8,                                     
+  scale_pos_weight = 1,                                        
+  seed = 1
+)
+
+# CV to find best nrounds
+cv_model <- xgb.cv(
+  params = xgb_params,
+  data = dtrain,
+  nrounds = 1000,
+  nfold = 5,
+  showsd = TRUE,
+  stratified = FALSE,
+  print_every_n = 10,
+  early_stopping_rounds = 50,                                  
+  maximize = FALSE
+)
+
+# print best nround
+best_nrounds <- cv_model$best_iteration
+print(paste("Optimal number of rounds: ", best_nrounds))
+
+######################################## 3. Tune tree specific parameters 
+
+# Setting up tuning grid
+tune_grid <- expand.grid(
+  nrounds = best_nrounds,
+  max_depth = seq(2, 7, 15),
+  min_child_weight = seq(1, 6, 2),
+  eta = 0.05,
+  gamma = 0,                                                
+  colsample_bytree = 0.8,                                   
+  subsample = 0.8                                           
+)
+
+# TrainControl for caret
+train_control <- trainControl(
+  method = "cv",
+  number = 5,
+  verboseIter = TRUE
+)
+
+# Train using caret
+caret_model <- train(
+  x = train_data[, predictors, drop = FALSE],   
+  y = train_data[[target]],                     
+  method = "xgbTree",
+  tuneGrid = tune_grid,
+  trControl = train_control,
+  metric = "RMSE"
+)
+
+# View best parameters
+print(caret_model$bestTune)
+
+###################################### 4. Tune regularization parameters 
+
+# Define new tuning grid
+gamma_grid <- expand.grid(
+  nrounds = best_nrounds,
+  max_depth = caret_model$bestTune$max_depth,
+  min_child_weight = caret_model$bestTune$min_child_weight,
+  eta = 0.05,
+  gamma = seq(0, 0.5, 0.1),
+  colsample_bytree = 0.8,
+  subsample = 0.8
+)
+
+# Train again
+caret_model_2 <- train(
+  x = train_data[, predictors, drop = FALSE],  
+  y = train_data[[target]],                    
+  method = "xgbTree",
+  tuneGrid = gamma_grid,
+  trControl = train_control,
+  metric = "RMSE"
+)
+
+# Check the best parameters again
+print(caret_model_2$bestTune)
+
+###################################  5. Regularization and Final Model
+
+# Tuning regularization parameters
+reg_grid <- expand.grid(
+  nrounds = best_nrounds,
+  max_depth = caret_model_2$bestTune$max_depth,
+  min_child_weight = caret_model_2$bestTune$min_child_weight,
+  eta = 0.05,
+  gamma = caret_model_2$bestTune$gamma,
+  subsample = caret_model_2$bestTune$subsample,
+  colsample_bytree = caret_model_2$bestTune$colsample_bytree
+)
+
+caret_model_3 <- train(
+  x = train_data[, predictors, drop = FALSE],   
+  y = train_data[[target]],                     
+  method = "xgbTree",
+  tuneGrid = reg_grid,
+  trControl = train_control,
+  metric = "RMSE"
+)
+
+# Best parameters from all the tuning
+print(caret_model_3$bestTune)
+
+# Here, reduce learning rate and increase nrounds if needed
+```
+
+
+Post-training evaluate performance metrics:
+```{r}
+# Make predictions on test set
+predictions <- predict(caret_model_3, newdata = test_data[, predictors])
+
+################################### Post-training evaluate performance metrics
+
+# Calculate MAE, R-squared, and correlation coefficient post-training
+actual_values <- test_data[[target]]
+
+# MAE calculation
+mae <- mean(abs(predictions - actual_values))
+
+# R-squared calculation
+rsq <- cor(predictions, actual_values)^2
+
+# Correlation coefficient
+correlation <- cor(predictions, actual_values)
+
+# RMSE calculation
+rmse <- sqrt(mean((predictions - actual_values)^2))
+
+# Display the results
+cat("MAE: ", mae, "\n")
+cat("R-squared: ", rsq, "\n")
+cat("Correlation Coefficient: ", correlation, "\n")
+cat("RMSE: ", rmse, "\n")
+```
+
+
+
+## xg(bmp_external)
+```{r}
+######################################## 1. Initial Setup
+# define predictors and target
+target <- "bpm_y_scr_external_t" 
+predictors <- colnames(full_dat)[!colnames(full_dat) %in% c("src_subject_id","bpm_y_scr_internal_t", "cbcl_scr_syn_internal_t",       "bpm_y_scr_totalprob_t", "cbcl_scr_syn_external_t", "cbcl_scr_syn_totprob_t", target)]  
+
+#print(predictors)
+# Convert to matrix for XGBoost
+dtrain <- xgb.DMatrix(data = as.matrix(train_data[, predictors]), label = train_data[[target]])
+dtest <- xgb.DMatrix(data = as.matrix(test_data[, predictors]), label = test_data[[target]])
+
+######################################## 2. Set initial values 
+
+# initial parameters for model
+xgb_params <- list(
+  objective = "reg:squarederror",                              
+  eval_metric = "rmse",                                       
+  eta = 0.05,                                                 
+  max_depth = 5,                                              
+  min_child_weight = 1,                                                                                                 
+  subsample = 0.8,
+  colsample_bytree = 0.8,                                     
+  scale_pos_weight = 1,                                        
+  seed = 1
+)
+
+# CV to find best nrounds
+cv_model <- xgb.cv(
+  params = xgb_params,
+  data = dtrain,
+  nrounds = 1000,
+  nfold = 5,
+  showsd = TRUE,
+  stratified = FALSE,
+  print_every_n = 10,
+  early_stopping_rounds = 50,                                  
+  maximize = FALSE
+)
+
+# print best nround
+best_nrounds <- cv_model$best_iteration
+print(paste("Optimal number of rounds: ", best_nrounds))
+
+######################################## 3. Tune tree specific parameters 
+
+# Setting up tuning grid
+tune_grid <- expand.grid(
+  nrounds = best_nrounds,
+  max_depth = seq(2, 7, 15),
+  min_child_weight = seq(1, 6, 2),
+  eta = 0.05,
+  gamma = 0,                                                
+  colsample_bytree = 0.8,                                   
+  subsample = 0.8                                           
+)
+
+# TrainControl for caret
+train_control <- trainControl(
+  method = "cv",
+  number = 5,
+  verboseIter = TRUE
+)
+
+# Train using caret
+caret_model <- train(
+  x = train_data[, predictors, drop = FALSE],   
+  y = train_data[[target]],                     
+  method = "xgbTree",
+  tuneGrid = tune_grid,
+  trControl = train_control,
+  metric = "RMSE"
+)
+
+# View best parameters
+print(caret_model$bestTune)
+
+###################################### 4. Tune regularization parameters 
+
+# Define new tuning grid
+gamma_grid <- expand.grid(
+  nrounds = best_nrounds,
+  max_depth = caret_model$bestTune$max_depth,
+  min_child_weight = caret_model$bestTune$min_child_weight,
+  eta = 0.05,
+  gamma = seq(0, 0.5, 0.1),
+  colsample_bytree = 0.8,
+  subsample = 0.8
+)
+
+# Train again
+caret_model_2 <- train(
+  x = train_data[, predictors, drop = FALSE],  
+  y = train_data[[target]],                    
+  method = "xgbTree",
+  tuneGrid = gamma_grid,
+  trControl = train_control,
+  metric = "RMSE"
+)
+
+# Check the best parameters again
+print(caret_model_2$bestTune)
+
+###################################  5. Regularization and Final Model
+
+# Tuning regularization parameters
+reg_grid <- expand.grid(
+  nrounds = best_nrounds,
+  max_depth = caret_model_2$bestTune$max_depth,
+  min_child_weight = caret_model_2$bestTune$min_child_weight,
+  eta = 0.05,
+  gamma = caret_model_2$bestTune$gamma,
+  subsample = caret_model_2$bestTune$subsample,
+  colsample_bytree = caret_model_2$bestTune$colsample_bytree
+)
+
+caret_model_3 <- train(
+  x = train_data[, predictors, drop = FALSE],   
+  y = train_data[[target]],                     
+  method = "xgbTree",
+  tuneGrid = reg_grid,
+  trControl = train_control,
+  metric = "RMSE"
+)
+
+# Best parameters from all the tuning
+print(caret_model_3$bestTune)
+
+# Here, reduce learning rate and increase nrounds if needed
+```
+
+Post-training evaluate performance metrics:
+```{r}
+# Make predictions on test set
+predictions <- predict(caret_model_3, newdata = test_data[, predictors])
+
+################################### Post-training evaluate performance metrics
+
+# Calculate MAE, R-squared, and correlation coefficient post-training
+actual_values <- test_data[[target]]
+
+# MAE calculation
+mae <- mean(abs(predictions - actual_values))
+
+# R-squared calculation
+rsq <- cor(predictions, actual_values)^2
+
+# Correlation coefficient
+correlation <- cor(predictions, actual_values)
+
+# RMSE calculation
+rmse <- sqrt(mean((predictions - actual_values)^2))
+
+# Display the results
+cat("MAE: ", mae, "\n")
+cat("R-squared: ", rsq, "\n")
+cat("Correlation Coefficient: ", correlation, "\n")
+cat("RMSE: ", rmse, "\n")
+```
+
+
+## xg(cbcl_external)
+```{r}
+######################################## 1. Initial Setup
+# define predictors and target
+target <- "cbcl_scr_syn_external_t" 
+predictors <- colnames(full_dat)[!colnames(full_dat) %in% c("src_subject_id","bpm_y_scr_internal_t", "bpm_y_scr_external_t",       "bpm_y_scr_totalprob_t", "cbcl_scr_syn_internal_t", "cbcl_scr_syn_totprob_t", target)]  
+
+#print(predictors)
+# Convert to matrix for XGBoost
+dtrain <- xgb.DMatrix(data = as.matrix(train_data[, predictors]), label = train_data[[target]])
+dtest <- xgb.DMatrix(data = as.matrix(test_data[, predictors]), label = test_data[[target]])
+
+######################################## 2. Set initial values 
+
+# initial parameters for model
+xgb_params <- list(
+  objective = "reg:squarederror",                              
+  eval_metric = "rmse",                                       
+  eta = 0.05,                                                 
+  max_depth = 5,                                              
+  min_child_weight = 1,                                                                                                 
+  subsample = 0.8,
+  colsample_bytree = 0.8,                                     
+  scale_pos_weight = 1,                                        
+  seed = 1
+)
+
+# CV to find best nrounds
+cv_model <- xgb.cv(
+  params = xgb_params,
+  data = dtrain,
+  nrounds = 1000,
+  nfold = 5,
+  showsd = TRUE,
+  stratified = FALSE,
+  print_every_n = 10,
+  early_stopping_rounds = 50,                                  
+  maximize = FALSE
+)
+
+# print best nround
+best_nrounds <- cv_model$best_iteration
+print(paste("Optimal number of rounds: ", best_nrounds))
+
+######################################## 3. Tune tree specific parameters 
+
+# Setting up tuning grid
+tune_grid <- expand.grid(
+  nrounds = best_nrounds,
+  max_depth = seq(2, 7, 15),
+  min_child_weight = seq(1, 6, 2),
+  eta = 0.05,
+  gamma = 0,                                                
+  colsample_bytree = 0.8,                                   
+  subsample = 0.8                                           
+)
+
+# TrainControl for caret
+train_control <- trainControl(
+  method = "cv",
+  number = 5,
+  verboseIter = TRUE
+)
+
+# Train using caret
+caret_model <- train(
+  x = train_data[, predictors, drop = FALSE],   
+  y = train_data[[target]],                     
+  method = "xgbTree",
+  tuneGrid = tune_grid,
+  trControl = train_control,
+  metric = "RMSE"
+)
+
+# View best parameters
+print(caret_model$bestTune)
+
+###################################### 4. Tune regularization parameters 
+
+# Define new tuning grid
+gamma_grid <- expand.grid(
+  nrounds = best_nrounds,
+  max_depth = caret_model$bestTune$max_depth,
+  min_child_weight = caret_model$bestTune$min_child_weight,
+  eta = 0.05,
+  gamma = seq(0, 0.5, 0.1),
+  colsample_bytree = 0.8,
+  subsample = 0.8
+)
+
+# Train again
+caret_model_2 <- train(
+  x = train_data[, predictors, drop = FALSE],  
+  y = train_data[[target]],                    
+  method = "xgbTree",
+  tuneGrid = gamma_grid,
+  trControl = train_control,
+  metric = "RMSE"
+)
+
+# Check the best parameters again
+print(caret_model_2$bestTune)
+
+###################################  5. Regularization and Final Model
+
+# Tuning regularization parameters
+reg_grid <- expand.grid(
+  nrounds = best_nrounds,
+  max_depth = caret_model_2$bestTune$max_depth,
+  min_child_weight = caret_model_2$bestTune$min_child_weight,
+  eta = 0.05,
+  gamma = caret_model_2$bestTune$gamma,
+  subsample = caret_model_2$bestTune$subsample,
+  colsample_bytree = caret_model_2$bestTune$colsample_bytree
+)
+
+caret_model_3 <- train(
+  x = train_data[, predictors, drop = FALSE],   
+  y = train_data[[target]],                     
+  method = "xgbTree",
+  tuneGrid = reg_grid,
+  trControl = train_control,
+  metric = "RMSE"
+)
+
+# Best parameters from all the tuning
+print(caret_model_3$bestTune)
+
+# Here, reduce learning rate and increase nrounds if needed
+```
+
+Post-training evaluate performance metrics:
+```{r}
+# Make predictions on test set
+predictions <- predict(caret_model_3, newdata = test_data[, predictors])
+
+################################### Post-training evaluate performance metrics
+
+# Calculate MAE, R-squared, and correlation coefficient post-training
+actual_values <- test_data[[target]]
+
+# MAE calculation
+mae <- mean(abs(predictions - actual_values))
+
+# R-squared calculation
+rsq <- cor(predictions, actual_values)^2
+
+# Correlation coefficient
+correlation <- cor(predictions, actual_values)
+
+# RMSE calculation
+rmse <- sqrt(mean((predictions - actual_values)^2))
+
+# Display the results
+cat("MAE: ", mae, "\n")
+cat("R-squared: ", rsq, "\n")
+cat("Correlation Coefficient: ", correlation, "\n")
+cat("RMSE: ", rmse, "\n")
+```
+
+```{r}
+
+# Train XGBoost model with evaluation metric monitoring
+watchlist <- list(train = dtrain, eval = dtest)
+
+xgb_params <- list(
+  objective = "reg:squarederror",
+  eval_metric = "rmse",
+  eta = 0.05,
+  max_depth = 5,
+  subsample = 0.8,
+  colsample_bytree = 0.8
+)
+
+model <- xgb.train(
+  params = xgb_params,
+  data = dtrain,
+  nrounds = 100,
+  watchlist = watchlist,
+  print_every_n = 10,
+  early_stopping_rounds = 10
+)
+
+# Access the evaluation log
+eval_log <- model$evaluation_log
+
+# Convert to long format for ggplot2
+eval_log_long <- reshape2::melt(eval_log, id.vars = "iter")
+
+# Generate RMSE plot
+ggplot(eval_log_long, aes(x = iter, y = value, color = variable)) +
+  geom_line() +
+  labs(title = "RMSE over iterations", x = "Number of iterations", y = "RMSE") +
+  theme_minimal() +
+  scale_color_manual(values = c("train_rmse" = "blue", "test_rmse" = "red"))
+
+```
+
+
+```{r}
+
+```
+
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+
+

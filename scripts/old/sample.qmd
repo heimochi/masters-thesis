@@ -1,0 +1,200 @@
+---
+title: "Sample characteristics"
+author: "MochiBear.Hei"
+date: "03.12.2025"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+# Data manipulation
+library(dplyr)
+library(tidyr)
+
+# Plotting
+library(ggplot2)
+
+# Utilities
+library(knitr)
+
+library(gt)
+```
+
+This script:
+
+
+#CBCL
+ - find out how to clean marital status, paretnal education and other parent education level 
+```{r}
+p_data <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_p_cbcl.csv")%>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(
+    src_subject_id,
+    cbcl_scr_syn_internal_t, 
+    cbcl_scr_syn_external_t, 
+    cbcl_scr_syn_totprob_t, 
+    cbcl_scr_dsm5_depress_t, 
+    cbcl_scr_dsm5_anxdisord_t, 
+    cbcl_scr_dsm5_somaticpr_t, 
+    cbcl_scr_dsm5_adhd_t, 
+    cbcl_scr_dsm5_opposit_t, 
+    cbcl_scr_dsm5_conduct_t, 
+    cbcl_scr_07_ocd_t
+  )
+
+demo <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/abcd-general/abcd_p_demo.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  mutate(
+    demo_comb_income_v2_l = if_else(demo_comb_income_v2_l %in% c(777, 999), NA_real_, demo_comb_income_v2_l),
+    demo_prnt_marital_v2_l = if_else(demo_prnt_marital_v2_l %in% c(777, 999), NA_real_, demo_prnt_marital_v2_l),
+    demo_prtnr_ed_v2_2yr_l = if_else(demo_prtnr_ed_v2_2yr_l %in% c(777, 999), NA_real_, demo_prtnr_ed_v2_2yr_l)
+  ) %>%
+  select(src_subject_id, 
+         demo_prnt_marital_v2_l, # Marital status of other parent
+         demo_prnt_ed_v2_2yr_l, # Parental education level
+         demo_prtnr_ed_v2_2yr_l # Other parent education level 
+         ) 
+
+demo_2 <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/abcd-general/abcd_p_demo.csv") %>%
+  filter(eventname == "baseline_year_1_arm_1") %>%
+  select(src_subject_id, 
+         demo_sex_v2, 
+         race_ethnicity, 
+         demo_brthdat_v2
+         ) 
+
+# Merge datasets by src_subject_id
+demo <- full_join(demo, demo_2, by = "src_subject_id")
+
+```
+
+
+
+
+Formatting variables
+```{r}
+str(demo)
+
+# Convert variables to factor with meaningful labels
+demo <- demo %>%
+  mutate(
+    demo_prnt_marital_v2_l = factor(demo_prnt_marital_v2_l, levels = c(1, 2, 3, 4, 5, 6, 777),
+                                    labels = c("Married", "Widowed", "Divorced", "Separated", "Never married", "Living with partner", "Refused to answer")),
+    
+    demo_prnt_ed_v2_2yr_l = factor(demo_prnt_ed_v2_2yr_l, levels = c(0:14, 16:23, 777, 999),
+                                    labels = c("Never attended/Kindergarten only", "1st grade", "2nd grade", 
+                                               "3rd grade", "4th grade", "5th grade", "6th grade", 
+                                               "7th grade", "8th grade", "9th grade", "10th grade", 
+                                               "11th grade", "12th grade, no diploma", 
+                                               "High school graduate", "GED or equivalent", 
+                                               "Less than 1 year of college credit/post-secondary education", 
+                                               "One year or more of college credit, no degree",
+                                               "Associate degree: Occupational, Technical, or Vocational", 
+                                               "Associate degree: Academic Program", 
+                                               "Bachelor's degree", "Master's degree",
+                                               "Professional School degree", "Doctoral degree", 
+                                               "Refused to answer", "Don't Know")),
+    
+    demo_prtnr_ed_v2_2yr_l = factor(demo_prtnr_ed_v2_2yr_l, levels = c(0:14, 16:23, 777, 999),
+                                    labels = c("Never attended/Kindergarten only", "1st grade", "2nd grade", 
+                                               "3rd grade", "4th grade", "5th grade", "6th grade", 
+                                               "7th grade", "8th grade", "9th grade", "10th grade", 
+                                               "11th grade", "12th grade, no diploma", 
+                                               "High school graduate", "GED or equivalent", 
+                                               "Associate degree: Occupational, Technical, or Vocational",
+                                               "Associate degree: Academic Program", 
+                                               "Bachelor's degree", "Master's degree",
+                                               "Professional School degree", "Doctoral degree", 
+                                               "Less than 1 year of college credit/post-secondary education", 
+                                               "One year or more of college credit, no degree",
+                                               "Refused to answer", "Don't Know")),
+
+    demo_sex_v2 = as.factor(demo_sex_v2),      
+    race_ethnicity = as.factor(race_ethnicity),  
+    demo_brthdat_v2 = as.integer(demo_brthdat_v2) 
+  )
+
+# Check
+str(demo)
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+

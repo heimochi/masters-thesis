@@ -1,0 +1,4 @@
+"0","# Identify linear dependencies among predictors"
+"0","full_model <- lm(lm_model, data = demo_mri)"
+"2","Error in eval(mf, parent.frame()) : object 'lm_model' not found
+"

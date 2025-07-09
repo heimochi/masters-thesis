@@ -1,0 +1,41 @@
+"0","################### no ocd but also not no diagnosis ###################
+
+# Filter subjects who are not in the no diagnosis group and do not have OCD
+non_ocd_non_no_diagnosis <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p != 1 & no_diagnosis != 1)
+
+# Calculate the total number of subjects in this filtered group
+total_non_ocd_non_no_diagnosis <- nrow(non_ocd_non_no_diagnosis)
+
+# Categorize subjects by number of disorders present
+non_ocd_non_no_diagnosis <- non_ocd_non_no_diagnosis %>%
+  mutate(
+    disorder_count = adhd + any_bipolar + any_conduct_odd + any_depressive_disorder +
+                     any_anxiety_disorder + any_drug_use_disorder + any_eating_disorder +
+                     ptsd + any_suicidality
+  ) %>%
+  mutate(
+    disorder_group = case_when(
+      disorder_count == 1 ~ ""1 disorder"",
+      disorder_count == 2 ~ ""2 disorders"",
+      disorder_count == 3 ~ ""3 disorders"",
+      disorder_count >= 4 ~ ""4 or more disorders""
+    )
+  )
+
+# Count number of subjects in each category of disorders
+disorder_counts <- non_ocd_non_no_diagnosis %>%
+  group_by(disorder_group) %>%
+  summarise(count = n())
+
+# Display total count
+cat(""Total number of subjects without OCD and not in 'no diagnosis':"", total_non_ocd_non_no_diagnosis, ""\n"")
+"
+"1","Total number of subjects without OCD and not in 'no diagnosis':"
+"1"," "
+"1","1316"
+"1"," "
+"1","
+"
+"0","# Display results"
+"0","print(disorder_counts)"

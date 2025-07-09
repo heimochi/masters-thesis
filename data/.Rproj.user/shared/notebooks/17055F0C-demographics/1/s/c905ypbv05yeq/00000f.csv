@@ -1,0 +1,7 @@
+"0","  filter(eventname == ""4_year_follow_up_y_arm_1"")  %>%
+  select(src_subject_id, 
+         nihtbx_totalcomp_fc #NIH toolbox - cognition total
+         ) 
+"
+"2","Error: object 'eventname' not found
+"

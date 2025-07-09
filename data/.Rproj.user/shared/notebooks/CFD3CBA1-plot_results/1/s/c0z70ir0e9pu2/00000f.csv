@@ -1,0 +1,7 @@
+"0","xgb.plot.importance(importance_matrix, 
+                    top_n = 10,  # Show top 10 features
+                    xlab = ""Relative Importance"")
+"
+"2","Error in xgb.plot.importance(importance_matrix, top_n = 10, xlab = ""Relative Importance"") : 
+  importance_matrix: must be a data.table
+"

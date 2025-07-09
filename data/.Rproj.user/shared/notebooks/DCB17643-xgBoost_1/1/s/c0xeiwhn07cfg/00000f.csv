@@ -1,0 +1,7 @@
+"0","#KSADS demographics"
+"0","demo <- read.csv(""/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/demo.csv"") %>%"
+"0","  select(-demo_gender_id_v2)"
+"0",""
+"0","demo$demo_sex_v2 <- as.factor(demo$demo_sex_v2)"
+"0","demo$race_ethnicity <- as.factor(demo$race_ethnicity)"
+"0","demo$demo_brthdat_v2 <- as.numeric(demo$demo_brthdat_v2)"

@@ -1,0 +1,5 @@
+"0","final_data <- full_dat %>%"
+"0","  select("
+"0","    src_subject_id, ksads_11_917_p"
+"0","  )"
+"0","  "

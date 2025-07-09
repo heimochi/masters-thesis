@@ -1,0 +1,4 @@
+"0","mri <- read.csv(""/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/mri.csv"") %>%"
+"0","  select (-smri_vol_scs_lesionlh, -smri_vol_scs_lesionrh, -smri_vol_scs_intracranialv) #have 4897 NA each + standardized by icv  "
+"0",""
+"0","full_dat <- inner_join(subids, mri, by = ""src_subject_id"")"

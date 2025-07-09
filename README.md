@@ -1,1 +1,1 @@
-Describe repository to people, how to set it up if they want to use it
+Data used for this thesis is sourced from the ABCD Data Release 5.1 (Haist & Jernigan, 2023). 

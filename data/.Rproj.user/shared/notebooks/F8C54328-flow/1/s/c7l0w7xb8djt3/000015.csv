@@ -1,0 +1,8 @@
+"0","bpm <- read.csv(""/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_y_bpm.csv"") %>%"
+"0","  filter(eventname == ""2_year_follow_up_y_arm_1"") %>%"
+"0","  select(src_subject_id, bpm_y_scr_internal_t) %>%"
+"0","  distinct(src_subject_id, .keep_all = TRUE) %>% #remove duplicates"
+"0","  mutate(across(c(bpm_y_scr_internal_t), ~ as.numeric(scale(.)))) #standardize"
+"0",""
+"0","# merge"
+"0","full_dat <- inner_join(full_dat, bpm, by = ""src_subject_id"")"

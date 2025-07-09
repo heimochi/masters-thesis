@@ -1,0 +1,7 @@
+"0","full_dat <- read.csv(""/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/subids.csv"") %>%"
+"0","  select(src_subject_id, ksads_11_917_p)"
+"0",""
+"0",""
+"0",""
+"0","subids <- full_dat %>%"
+"0","  filter(ksads_11_917_p == ""1"")  #CHANGE GROUP HERE "

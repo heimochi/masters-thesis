@@ -1,0 +1,5 @@
+"0","full_dat <- full_dat %>%"
+"0","  select("
+"0","    src_subject_id"
+"0","  )"
+"0","write.csv(full_dat, ""/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/demo_subid.csv"", row.names = FALSE)"

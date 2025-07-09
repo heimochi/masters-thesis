@@ -1,0 +1,4 @@
+"0","# Only basic demographic variables "
+"0","lm_model <- lm(cbcl_scr_syn_internal_t ~ demo_brthdat_v2 + demo_sex_v2 + race_ethnicity, data = demo)"
+"2","Error in eval(predvars, data, env) : object 'demo_sex_v2' not found
+"

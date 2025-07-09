@@ -1,0 +1,8 @@
+"0","# Save the results to a CSV file"
+"0","#write.csv(results, file = ""/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/cbcl_i_predicted_vs_actual.csv"", row.names = FALSE)"
+"0",""
+"0",""
+"0","# calculate residuals"
+"0","results$residuals <- results$Actual - results$Predicted"
+"2","Error: object 'results' not found
+"

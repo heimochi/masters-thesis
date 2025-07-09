@@ -1,0 +1,5 @@
+"0","mri <- read.csv(""/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/mri.csv"") %>%"
+"0","  select (-smri_vol_scs_lesionlh, -smri_vol_scs_lesionrh, -smri_vol_scs_intracranialv) #removed these columns because they have 4897 NA each; should i remove , mrisdp_604 total cortical volume?"
+"0",""
+"0",""
+"0","full_dat <- mri[mri$src_subject_id %in% subids$src_subject_id, ]"

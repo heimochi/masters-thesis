@@ -1,0 +1,25 @@
+"0","# Number of occurrences of ksads_11_917_p equal to 1
+count_1 <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p == 1) %>%
+  summarise(count = n())
+
+# Number of occurrences of ksads_11_917_p equal to 0
+count_0 <- all_ksads_diagnosis %>%
+  filter(ksads_11_917_p == 0) %>%
+  summarise(count = n())
+
+# Print results
+print(paste(""Count of 1:"", count_1$count))
+"
+"1","[1]"
+"1"," ""Count of 1: 662"""
+"1","
+"
+"0","print(paste(""Count of 0:"", count_0$count))"
+"1","[1]"
+"1"," ""Count of 0: 10068"""
+"1","
+"
+"0","```"
+"2","Error: attempt to use zero-length variable name
+"

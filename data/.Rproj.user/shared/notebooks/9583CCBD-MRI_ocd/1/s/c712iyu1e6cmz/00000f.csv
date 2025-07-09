@@ -1,0 +1,2 @@
+"0","mri <- cortical %>%"
+"0","  left_join(subcortical, by = c(""src_subject_id"")) "

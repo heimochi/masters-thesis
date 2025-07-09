@@ -1,0 +1,414 @@
+----
+title: "xgboost: Parent Internalizing"
+author: "MochiBear.Hei"
+date: "01.10.2025"
+format:
+  html:
+    toc: true
+    toc-location: left
+    embed-resources: true
+    page-layout: full
+    html-math-method: katex
+editor: source
+---
+
+```{css, echo = F}
+body{
+  font-family: Helvetica;
+  font-size: 16pt;
+  max-width: 1000px;
+  margin: auto;
+  margin-left:310px;
+}
+pre{
+  font-size: 14px;
+}
+/* Headers */
+h1{
+    font-size: 24pt;
+  }
+h1,h2{
+    font-size: 20pt;
+  }
+h3,h4,h5,h6{
+  font-size: 18pt;
+}
+#TOC {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  overflow:auto;
+}
+```
+
+
+```{r setup,suppressPackageStartupMessages= TRUE}
+#| include: false
+#| message: false
+#| warning: false
+#| results: hide
+knitr::opts_chunk$set(echo = TRUE, dpi = 300)
+
+library(dplyr)
+library(tidyr)
+# test scatterplot matrix 
+library(ggcorrplot)
+library(GGally)
+```
+
+# Load
+#CBCL
+```{r}
+# Load necessary packages
+library(dplyr)
+library(readr)
+library(caret)
+
+# --- Load OCD Subset IDs ---
+subids <- read_csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/subids.csv") %>%
+  select(src_subject_id, ksads_11_917_p) %>%
+  mutate(ksads_11_917_p = as.factor(ksads_11_917_p))  # OCD diagnosis (categorical)
+```
+
+
+```{r}
+# --- Load MRI Data ---
+mri <- read_csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/mri.csv") %>%
+  select(-smri_vol_scs_lesionlh, -smri_vol_scs_lesionrh, -smri_vol_scs_intracranialv)  # Drop high-NA/collinear vars
+
+# Merge subject IDs and MRI
+full_dat <- inner_join(subids, mri, by = "src_subject_id")
+```
+
+
+```{r}
+# --- Load CBCL Internalizing T-Scores ---
+cbcl <- read_csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_p_cbcl.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id, cbcl_scr_syn_internal_t) %>%
+  distinct(src_subject_id, .keep_all = TRUE)
+
+# Merge CBCL into dataset
+full_dat <- inner_join(full_dat, cbcl, by = "src_subject_id")
+
+# --- Load Demographics ---
+demo <- read_csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/demo.csv") %>%
+  select(src_subject_id, demo_sex_v2, race_ethnicity, demo_brthdat_v2) %>%
+  mutate(
+    demo_sex_v2 = as.factor(demo_sex_v2),
+    race_ethnicity = as.factor(race_ethnicity),
+    demo_brthdat_v2 = as.numeric(demo_brthdat_v2)
+  )
+```
+
+
+```{r}
+# --- Load SES Latent Factors ---
+latent <- read_csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/abcd-general/abcd_y_lf.csv") %>%
+  select(-eventname)
+
+# Convert SES variables to numeric
+latent <- latent %>%
+  mutate(across(starts_with("latent_factor_ss_"), as.numeric))
+```
+
+
+```{r}
+# --- Merge Demographics and SES ---
+full_dat <- full_dat %>%
+  left_join(demo, by = "src_subject_id") %>%
+  left_join(latent, by = "src_subject_id")
+
+# --- Impute Missing Values (Mean Imputation) ---
+na_counts <- colSums(is.na(full_dat))
+na_counts[na_counts > 0]
+
+full_dat <- full_dat %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
+```
+
+
+```{r}
+# --- Stratified Split for CBCL Modeling ---
+set.seed(123)
+
+# Create bins for stratification
+full_dat <- full_dat %>%
+  mutate(cbcl_internalizing = cut(
+    cbcl_scr_syn_internal_t,
+    breaks = c(-Inf, 65, 70, Inf),
+    labels = c("normal", "borderline", "clinical"),
+    right = FALSE
+  )) %>%
+  mutate(cbcl_internalizing = as.numeric(cbcl_internalizing) - 1)
+
+# Split into train/calib/test (70/15/15)
+train_index <- createDataPartition(full_dat$cbcl_internalizing, p = 0.7, list = FALSE)
+train_data <- full_dat[train_index, ]
+remaining_data <- full_dat[-train_index, ]
+test_index <- createDataPartition(remaining_data$cbcl_internalizing, p = 0.5, list = FALSE)
+calib_data <- remaining_data[-test_index, ]
+test_data <- remaining_data[test_index, ]
+
+
+```
+
+
+# Linear Models 
+## Demo 
+```{r}
+# Only basic demographic variables 
+lm_model <- lm(cbcl_scr_syn_internal_t ~ demo_brthdat_v2 + demo_sex_v2 + race_ethnicity, data = train_data)
+
+# Output model summary
+summary(lm_model)
+```
+
+## Latent 
+```{r}
+#only ses, social, and perinatal
+lm_model <- lm(cbcl_scr_syn_internal_t ~ 
+               latent_factor_ss_general_ses + latent_factor_ss_social + 
+               latent_factor_ss_perinatal, data = train_data)
+
+# Output model summary
+summary(lm_model)
+```
+
+## MRI
+```{r}
+# Select only relevant smri and mris features along with the outcome variable
+model_data <- train_data %>%
+  select(cbcl_scr_syn_internal_t, starts_with("smri_vol_"), starts_with("mrisdp_"))
+
+# Fit the linear model using all selected features
+lm_model <- lm(cbcl_scr_syn_internal_t ~ ., data = model_data)
+
+# Output model summary
+summary(lm_model)
+```
+
+All
+```{r}
+
+model_data <- train_data %>%
+  select(cbcl_scr_syn_internal_t, starts_with("demo_"), 
+         starts_with("latent_factor_"),
+         starts_with("smri_vol_"), starts_with("mrisdp_"))
+lm_model <- lm(cbcl_scr_syn_internal_t ~ ., data = model_data)
+summary(lm_model)
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+
+
+# Load
+#BPM
+```{r}
+# Load necessary packages
+library(dplyr)
+library(readr)
+library(caret)
+
+# --- Load OCD Subset IDs ---
+subids <- read_csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/subids.csv") %>%
+  select(src_subject_id, ksads_11_917_p) %>%
+  mutate(ksads_11_917_p = as.factor(ksads_11_917_p))  # OCD diagnosis (categorical)
+```
+
+
+```{r}
+# --- Load MRI Data ---
+mri <- read_csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/mri.csv") %>%
+  select(-smri_vol_scs_lesionlh, -smri_vol_scs_lesionrh, -smri_vol_scs_intracranialv)  # Drop high-NA/collinear vars
+
+# Merge subject IDs and MRI
+full_dat <- inner_join(subids, mri, by = "src_subject_id")
+```
+
+
+```{r}
+# --- Load bpm Internalizing T-Scores ---
+bpm <- read_csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_y_bpm.csv") %>%
+  filter(eventname == "2_year_follow_up_y_arm_1") %>%
+  select(src_subject_id, bpm_y_scr_internal_t) %>%
+  distinct(src_subject_id, .keep_all = TRUE)
+
+# Merge bpm into dataset
+full_dat <- inner_join(full_dat, bpm, by = "src_subject_id")
+
+# --- Load Demographics ---
+demo <- read_csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/ocd/demo.csv") %>%
+  select(src_subject_id, demo_sex_v2, race_ethnicity, demo_brthdat_v2) %>%
+  mutate(
+    demo_sex_v2 = as.factor(demo_sex_v2),
+    race_ethnicity = as.factor(race_ethnicity),
+    demo_brthdat_v2 = as.numeric(demo_brthdat_v2)
+  )
+```
+
+
+```{r}
+# --- Load SES Latent Factors ---
+latent <- read_csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/abcd-general/abcd_y_lf.csv") %>%
+  select(-eventname)
+
+# Convert SES variables to numeric
+latent <- latent %>%
+  mutate(across(starts_with("latent_factor_ss_"), as.numeric))
+```
+
+
+```{r}
+# --- Merge Demographics and SES ---
+full_dat <- full_dat %>%
+  left_join(demo, by = "src_subject_id") %>%
+  left_join(latent, by = "src_subject_id")
+
+# --- Impute Missing Values (Mean Imputation) ---
+na_counts <- colSums(is.na(full_dat))
+na_counts[na_counts > 0]
+
+full_dat <- full_dat %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
+```
+
+
+```{r}
+# --- Stratified Split for bpm Modeling ---
+set.seed(123)
+
+# Create bins for stratification
+full_dat <- full_dat %>%
+  mutate(bpm_internalizing = cut(
+    bpm_y_scr_internal_t,
+    breaks = c(-Inf, 65, 70, Inf),
+    labels = c("normal", "borderline", "clinical"),
+    right = FALSE
+  )) %>%
+  mutate(bpm_internalizing = as.numeric(bpm_internalizing) - 1)
+
+# Split into train/calib/test (70/15/15)
+train_index <- createDataPartition(full_dat$bpm_internalizing, p = 0.7, list = FALSE)
+train_data <- full_dat[train_index, ]
+remaining_data <- full_dat[-train_index, ]
+test_index <- createDataPartition(remaining_data$bpm_internalizing, p = 0.5, list = FALSE)
+calib_data <- remaining_data[-test_index, ]
+test_data <- remaining_data[test_index, ]
+
+
+```
+
+
+# Linear Models 
+## Demo 
+```{r}
+# Only basic demographic variables 
+lm_model <- lm(bpm_y_scr_internal_t ~ demo_brthdat_v2 + demo_sex_v2 + race_ethnicity, data = train_data)
+
+# Output model summary
+summary(lm_model)
+```
+
+## Latent 
+```{r}
+#only ses, social, and perinatal
+lm_model <- lm(bpm_y_scr_internal_t ~ 
+               latent_factor_ss_general_ses + latent_factor_ss_social + 
+               latent_factor_ss_perinatal, data = train_data)
+
+# Output model summary
+summary(lm_model)
+```
+
+## MRI
+```{r}
+# Select only relevant smri and mris features along with the outcome variable
+model_data <- train_data %>%
+  select(bpm_y_scr_internal_t, starts_with("smri_vol_"), starts_with("mrisdp_"))
+
+# Fit the linear model using all selected features
+lm_model <- lm(bpm_y_scr_internal_t ~ ., data = model_data)
+
+# Output model summary
+summary(lm_model)
+```
+
+All
+```{r}
+
+model_data <- train_data %>%
+  select(bpm_y_scr_internal_t, starts_with("demo_"), 
+         starts_with("latent_factor_"),
+         starts_with("smri_vol_"), starts_with("mrisdp_"))
+lm_model <- lm(bpm_y_scr_internal_t ~ ., data = model_data)
+summary(lm_model)
+
+
+```
+
+
+```{r}
+# Load necessary library
+library(ggplot2)
+
+# Create data
+model_data <- data.frame(
+  Model = rep(c("Demographics", "Psychosocial", "sMRI", "All Predictors"), times = 2),
+  R2 = c(0.016, 0.010, 0.060, 0.073, 0.005, 0.017, 0.060, 0.074),
+  Adj_R2 = c(0.014, 0.009, 0.019, 0.031, 0.004, 0.016, 0.018, 0.032),
+  Reporter = rep(c("Parent Report", "Child Report"), each = 4)
+)
+
+# Melt the data for ggplot
+library(reshape2)
+model_data_melt <- melt(model_data, id.vars = c("Model", "Reporter"), 
+                        variable.name = "Metric", value.name = "Value")
+
+# Load viridis if not already
+library(viridis)
+
+# Updated plot with viridis color palette and custom legend labels
+ggplot(model_data_melt, aes(x = Model, y = Value, fill = Metric)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  facet_wrap(~ Reporter) +
+  labs(title = "Model Fit for Predicting Internalizing Symptoms",
+       y = "Variance Explained",
+       x = "Model Type") +
+  scale_fill_viridis_d(labels = c("R²", "Adjusted R²"), name = NULL) +
+  theme_minimal()
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+
+```
