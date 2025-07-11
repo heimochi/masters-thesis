@@ -1,5 +1,5 @@
-----
-title: "xgboost: Parent Internalizing"
+---
+title: "Initial Linear Model Exploration"
 author: "MochiBear.Hei"
 date: "01.10.2025"
 format:
@@ -57,6 +57,9 @@ library(tidyr)
 library(ggcorrplot)
 library(GGally)
 ```
+
+Test linear models to predict internalizing symptoms (CBCL & BPM) using demographics, SES latent factors, and MRI features. Includes data preprocessing, stratified splitting, and R² visualizations for parent and child reports.
+
 
 # Load
 #CBCL
@@ -202,18 +205,6 @@ summary(lm_model)
 
 
 ```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-
 
 # Load
 #BPM
@@ -393,22 +384,3 @@ ggplot(model_data_melt, aes(x = Model, y = Value, fill = Metric)) +
 
 ```
 
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```

@@ -68,6 +68,8 @@ library(knitr)
 
 ```
 
+Loads MRI and internalizing symptom scores (BPM & CBCL), handles missing values, splits into train/test sets, and visualizes T-score distributions and sample balance. Includes descriptive statistics and histogram/density comparisons for model evaluation.
+
 # Load
 ## ID list
 ```{r}
@@ -240,7 +242,6 @@ ggsave("t_score_distribution.pdf", plot = p, width = 8, height = 5)
 
 ```
 
-
 #evaluation RMSE distribution
 ```{r}
 # Calculate descriptive statistics: mean, SD, min, max
@@ -257,60 +258,5 @@ full_dat %>%
     Min_CBCL  = min(cbcl_scr_syn_internal_t, na.rm = TRUE),
     Max_CBCL  = max(cbcl_scr_syn_internal_t, na.rm = TRUE)
   )
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
 
 ```

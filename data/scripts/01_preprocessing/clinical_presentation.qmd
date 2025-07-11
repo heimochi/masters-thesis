@@ -67,6 +67,7 @@ library(epitools)
 
 # Comorbid Conditions
 Report on any other diagnosed mental health conditions that are prevalent within the sample
+Diagnostic summary variables from KSADS data, including comorbidity flags, "only OCD", and "no diagnosis". Merges with CBCL and health data, calculates prevalence by OCD status, and performs chi-square tests, odds ratios, and t-tests to explore psychiatric comorbidity patterns.
 
 Clinical diagnosis
 

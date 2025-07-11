@@ -1,5 +1,5 @@
 ---
-title: "Plot four symptom domains"
+title: "Plot Externalizing Symptoms for Child-Report"
 author: "MochiBear.Hei"
 date: "04.16.2025"
 format:
@@ -63,49 +63,45 @@ library(patchwork)
 theme_set(theme_classic(base_size = 14))
 ```
 
+Evaluates the XGBoost multiclass model for BPM externalizing symptoms. Performs prediction, threshold calibration (via Youden’s J), accuracy/confusion matrix reporting, OvR ROC and calibration plots, and test set evaluation.
+
 # load model
 ```{r}
-load("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_bpm_i_model+preds.RData")
+load("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_bpm_e_model+preds.RData")
 ```
 
 Make predictions
 ```{r}
 #set labels for models = 0, 1, 2, 
-class_labels <- sort(unique(train_data$bpm_internalizing))
+class_labels <- sort(unique(train_data$bpm_externalizing))
 
-#xgboost test matrix 
 dcalib <- xgb.DMatrix(data = x_calib, label = y_calib)
 
-# ---- Predict probabilities on calibration set ----
+#predict on calibration set 
 pred_probs_calib <- predict(final_model, dcalib, reshape = TRUE, outputmargin = FALSE)
 colnames(pred_probs_calib) <- as.character(class_labels)
 ```
 
-# Argmax predictions
+Argmax predictions
 ```{r}
-# Argmax predictions (raw, not calibrated)
 pred_classes_argmax <- max.col(pred_probs_calib) - 1  # assumes labels 0,1,2
 
-# Factors for comparison
 y_true_calib <- factor(y_calib, levels = class_labels)
 y_pred_calib <- factor(pred_classes_argmax, levels = class_labels)
-
-# Accuracy and confusion matrix
-accuracy <- mean(y_pred_calib == y_true_calib)
-cat("✅ Accuracy:", round(accuracy, 4), "\n")
 
 conf_matrix <- confusionMatrix(y_pred_calib, y_true_calib)
 print(conf_matrix)
 ```
 
+
 # Threshold calibraiton
 feed softprob results (pred_probs) from final model with test data through threshold calibration
-optimize balanced accuracy 
+optimize balance accuracy
 ```{r}
-# thresholds per class using Youden's J statistic
+# Youden's J statistic
 tune_thresholds <- function(pred_probs, y_calib) {
   sapply(class_labels, function(cls) {
-    # Set threshold search range per class
+    # set threshold search range per class
     if (cls == "0") {
       thresholds <- seq(0.80, 1.00, by = 0.01)  # stricter range for class 0
     } else {
@@ -118,7 +114,7 @@ tune_thresholds <- function(pred_probs, y_calib) {
     youden_scores <- sapply(thresholds, function(t) {
       preds <- as.integer(probs >= t)
       
-      # Confusion matrix components
+      # confusion matrix components
       tp <- sum(preds == 1 & y_true_bin == 1)
       tn <- sum(preds == 0 & y_true_bin == 0)
       fp <- sum(preds == 1 & y_true_bin == 0)
@@ -136,36 +132,34 @@ tune_thresholds <- function(pred_probs, y_calib) {
   })
 }
 
-
-# Calibrate thresholds
 best_thresholds <- tune_thresholds(pred_probs_calib, y_calib)
 print(best_thresholds)
-
 ```
 
-# calibration confusion matrix
-```{r}
 
-# manual thresholds (corresponding to class labels 0, 1, 2)
-best_thresholds <- c("0" = 0.83, "1" = 0.02, "2" = 0.02)     ##################CHANGE THRESHOLDS HEEEEER
-#apply
+# Confusion matrix
+```{r}
+#put thresholds here
+best_thresholds <- c("0" = 0.89, "1" = 0.09, "2" = 0.04)     ##################CHANGE THRESHOLDS HEEEEER
+
+#apply threshold
 thresholded_preds <- sapply(class_labels, function(cls) {
   probs <- pred_probs_calib[, as.character(cls)]
   as.integer(probs >= best_thresholds[as.character(cls)])
 })
 
+# pick highest probability
 pred_classes_thresh <- apply(thresholded_preds, 1, function(row) {
   if (sum(row) == 0) {
-    return(NA)  # No threshold passed
+    return(NA)  
   } else if (sum(row) == 1) {
-    return(which(row == 1) - 1)  # single class passed threshold
+    return(which(row == 1) - 1)  
   } else {
-    # Multiple thresholds passed: pick one with max probability
     return(which.max(pred_probs_calib[row == 1, ][1, ]) - 1)
   }
 })
 
-# if NA use argmax 
+# if NA use argmax
 na_indices <- is.na(pred_classes_thresh)
 if (any(na_indices)) {
   fallback_preds <- max.col(pred_probs_calib[na_indices, ]) - 1
@@ -175,16 +169,15 @@ if (any(na_indices)) {
 y_pred_calib_thresh <- factor(pred_classes_thresh, levels = class_labels)
 y_true_calib <- factor(y_calib, levels = class_labels)
 
-# evaluate
 conf_matrix_thresh <- confusionMatrix(y_pred_calib_thresh, y_true_calib)
 print(conf_matrix_thresh)
 ```
+
 
 # Predict probability on test set 
 ```{r}
 dtest <- xgb.DMatrix(data = x_test, label = y_test) 
 
-# predict soft probabilities
 pred_probs_test <- predict(final_model, dtest, reshape = TRUE)
 colnames(pred_probs_test) <- as.character(class_labels)
 
@@ -195,7 +188,7 @@ thresholded_preds_test <- sapply(class_labels, function(cls) {
 
 pred_classes_test <- apply(thresholded_preds_test, 1, function(row) {
   if (sum(row) == 0) {
-    return(NA)  # no threshold met
+    return(NA)  
   } else if (sum(row) == 1) {
     return(which(row == 1) - 1)
   } else {
@@ -208,8 +201,6 @@ if (any(na_indices)) {
   fallback_preds <- max.col(pred_probs_test[na_indices, ]) - 1
   pred_classes_test[na_indices] <- fallback_preds
 }
-
-
 ```
 
 # Evaluate
@@ -221,22 +212,23 @@ conf_matrix_test <- confusionMatrix(y_pred_test, y_true_test)
 print(conf_matrix_test)
 ```
 
+
+
 for plotting
 ```{r}
 df_plot <- as.data.frame(pred_probs_test)
 colnames(df_plot) <- as.character(class_labels)
 df_plot$true_label <- y_test
-
 # long format
 df_long <- df_plot %>%
   pivot_longer(cols = -true_label, names_to = "class", values_to = "prob") %>%
   mutate(class = factor(class, levels = class_labels),
          is_true_class = as.integer(as.character(true_label) == as.character(class)))
-
 ```
 
-#plot all together 
+# ROC AUC 
 ```{r}
+#plot all together 
 class_names <- c("0" = "Healthy", "1" = "Borderline", "2" = "Clinical")
 plots <- lapply(class_labels, function(cls) {
   df_cls <- df_long %>% filter(class == cls)
@@ -287,9 +279,11 @@ plots <- lapply(class_labels, function(cls) {
 final_plot <- wrap_plots(plots, nrow = 1)
 print(final_plot)
 
-ggsave("bpm_i_OvR_ROC.png", final_plot, width = 12, height = 6, dpi = 300)
+ggsave("bpm_e_OvR_ROC.png", final_plot, width = 12, height = 6, dpi = 300)
 
 ```
+
+
 
 #plot confusion matrix
 ```{r}
@@ -321,167 +315,3 @@ ggplot(conf_df, aes(x = Predicted, y = True, fill = Count)) +
 ggsave("confusion_matrix_heatmap.png", width = 6, height = 5, dpi = 300)
 
 ```
-
-#plot calibration curves
-```{r}
-get_calibration_data <- function(df, class_label, n_bins = 10) {
-  df_class <- df %>%
-    filter(class == class_label) %>%
-    mutate(bin = cut(prob, breaks = seq(0, 1, length.out = n_bins + 1), include.lowest = TRUE)) %>%
-    group_by(bin) %>%
-    summarise(
-      mean_pred = mean(prob),
-      frac_positives = mean(is_true_class),
-      .groups = "drop"
-    )
-  
-  df_class$class <- class_label
-  return(df_class)
-}
-
-# Apply to each class
-cal_data <- bind_rows(lapply(class_labels, function(cls) get_calibration_data(df_long, cls)))
-class_names <- c("0" = "Healthy", "1" = "Borderline", "2" = "Clinical")
-
-cal_data$class <- factor(cal_data$class, levels = names(class_names), labels = class_names)
-
-ggplot(cal_data, aes(x = mean_pred, y = frac_positives, color = class)) +
-  geom_line(size = 1.2) +
-  geom_point(size = 2) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "black") +
-  labs(
-    title = "Calibration Curves (OvR)",
-    x = "Mean Predicted Probability",
-    y = "Fraction of Positives (Observed)",
-    color = "Class"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    plot.title = element_text(face = "bold", hjust = 0.5),
-    legend.position = "bottom"
-  )
-
-ggsave("calibration_curves_OvR.png", width = 7, height = 5, dpi = 300)
-
-```
-
-
-# Permutation test 
-```{r}
-# Observed accuracy
-observed_acc <- mean(pred_classes_test == y_test)
-
-# Permutation loop
-n_perms <- 1000
-perm_accs <- numeric(n_perms)
-
-for (i in 1:n_perms) {
-  permuted_labels <- sample(y_test)
-  dtest_perm <- xgb.DMatrix(data = x_test, label = permuted_labels)
-  
-  pred_probs_perm <- predict(final_model, dtest_perm, reshape = TRUE)
-  colnames(pred_probs_perm) <- as.character(class_labels)
-
-  thresholded_preds_perm <- sapply(class_labels, function(cls) {
-    probs <- pred_probs_perm[, as.character(cls)]
-    as.integer(probs >= best_thresholds[as.character(cls)])
-  })
-
-  pred_classes_perm <- apply(thresholded_preds_perm, 1, function(row) {
-    if (sum(row) == 0) return(NA)
-    else if (sum(row) == 1) return(which(row == 1) - 1)
-    else return(which.max(pred_probs_perm[row == 1, ][1, ]) - 1)
-  })
-
-  na_idx <- is.na(pred_classes_perm)
-  if (any(na_idx)) {
-    fallback_preds <- max.col(pred_probs_perm[na_idx, ]) - 1
-    pred_classes_perm[na_idx] <- fallback_preds
-  }
-
-  perm_accs[i] <- mean(pred_classes_perm == permuted_labels)
-}
-
-# Compute p-value
-p_value <- mean(perm_accs >= observed_acc)
-print(paste("Permutation test p-value:", p_value))
-```
-
-plot perumation
-```{r}
-hist_data <- data.frame(stat = perm_accs)
-
-dens <- density(perm_accs)
-y_pos <- max(dens$y) * 0.95 
-
-perm_plot <- ggplot(hist_data, aes(x = stat)) +
-  geom_density(fill = "#800080", alpha = 0.4) +
-  geom_vline(xintercept = observed_acc, color = "red", size = 1.2) +
-  annotate("text", x = observed_acc, y = y_pos,
-           label = "Observed accuracy", hjust = -0.1, vjust = 1, color = "red", size = 4) +
-  labs(
-    title = "Permutation Test: Model Accuracy vs. Null Distribution",
-    subtitle = "Null distribution of accuracy under label permutation",
-    x = "Classification Accuracy",
-    y = "Density",
-    caption = "Green line: Accuracy on true labels\nBlue area: Distribution under random label permutations"
-  ) +
-  theme_classic(base_size = 14) +
-  theme(
-    plot.title = element_text(face = "bold", size = 16),
-    plot.subtitle = element_text(size = 12),
-    plot.caption = element_text(size = 10, hjust = 0, color = "gray30")
-  )
-
-print(perm_plot)
-
-ggsave("permutation_test.png", plot = perm_plot, width = 7, height = 5, dpi = 300)
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-
-```{r}
-
-
-```
-
-
-```{r}
-
-
-```
-
-
-
-```{r}
-
-
-```
-
-

@@ -65,6 +65,8 @@ library(gt)
 
 
 # Cleaning
+Cleans and merges demographic, puberty, SES, cognition, and MRI usability data. Formats key variables, computes group-level summaries by OCD status, and prepares full dataset for downstream analysis.
+
 ## Diagnosis and ksads demo
 ```{r}
 diagnosis <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/OCD/diagnosis.csv")
@@ -92,7 +94,6 @@ demo_2 <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/abcd-genera
     demo_prtnr_ed_v2_2yr_l = if_else(demo_prtnr_ed_v2_2yr_l %in% c(777, 999), NA_real_, demo_prtnr_ed_v2_2yr_l)
   )
 
-# Select only the specified columns
 demo_2 <- demo_2 %>%
   select(src_subject_id, 
          demo_prnt_marital_v2_l, # Marital status of other parent
@@ -577,71 +578,4 @@ latent <- latent %>%
 full_data <- full_data %>%
   left_join(latent, by = c("src_subject_id")) 
 ```
-
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-
-
-
-
 

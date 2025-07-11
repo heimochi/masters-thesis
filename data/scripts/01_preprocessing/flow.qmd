@@ -66,6 +66,10 @@ library(knitr)
 
 ```
 
+
+Filters MRI, CBCL, BPM, and medication data to define a clean OCD vs. healthy control sample. Excludes subjects with low image quality or psychotropic medication use, and ensures healthy controls are free of comorbidities. Saves final subject lists for analysis and demographic reporting.
+
+
 Diagnosis save subject list
 ```{r}
 subids <- read.csv("/Users/maggieheimvik/Documents/LCBC/Data/ABCD/core/mental-health/mh_p_ksads_ss.csv") %>%
@@ -271,8 +275,6 @@ full_dat <- full_dat %>%
 write.csv(full_dat, "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/demo_subid.csv", row.names = FALSE)
 ```
 
-
-}
 which src_subj are using meds
 ```{r}
 #find
@@ -290,39 +292,3 @@ print(antipsychotic_details)
 print("Participants using antidepressants:")
 print(antidepressant_details)
 ```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-

@@ -1,5 +1,5 @@
 ---
-title: "Plot four symptom domains"
+title: "Plot Externalizing Symptoms for Parent-Report"
 author: "MochiBear.Hei"
 date: "04.16.2025"
 format:
@@ -62,6 +62,8 @@ library(Metrics)
 library(patchwork) 
 theme_set(theme_classic(base_size = 14))
 ```
+
+Evaluates XGBoost multiclass model for CBCL externalizing symptoms using argmax and threshold-calibrated classification. Includes confusion matrices, OvR ROC curves, class-wise probability histograms, and performance visualization on test data.
 
 # load model
 ```{r}

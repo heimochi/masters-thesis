@@ -64,9 +64,9 @@ library(viridis)
 
 # Utilities
 library(knitr)
-
-
 ```
+
+Loads MRI and externalizing symptom scores (BPM & CBCL), handles missing data, and visualizes youth- and parent-reported externalizing symptom T-score distributions using overlaid histograms and density plots.
 
 # Load
 ## ID list

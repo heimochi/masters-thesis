@@ -68,6 +68,9 @@ library(gt)
 library(epitools)
 ```
 
+#
+Analyzes psychiatric comorbidities in OCD vs. non-OCD groups using summary diagnosis flags and CBCL DSM scales. Computes prevalence, t-tests, and group differences across multiple disorders.
+
 ## Load
 ```{r}
 
@@ -640,8 +643,6 @@ ocs_score <- ocs_score %>%
   select(src_subject_id, ocs_score)
 ```
 
-
-
 # Health variables
 ```{r}
 health <- read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/physical-health/ph_p_mhx.csv") 
@@ -669,24 +670,3 @@ medication <-  read.csv("/Users/maggieheimvik/Desktop/LCBC/Data/ABCD/core/physic
 # Recode and simplify medication
 ```
 
-
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```

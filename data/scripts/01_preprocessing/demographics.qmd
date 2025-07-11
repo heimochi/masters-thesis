@@ -67,6 +67,8 @@ library(knitr)
 
 ```
 
+Compares participants with OCD to healthy controls on demographics, cognition, and psychiatric diagnoses. Generates summary statistics, formats variables, and prepares subgroup-specific data for analysis and reporting.
+
 Healthy vs OCD
 ```{r}
 full_dat <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/subids.csv") %>%
@@ -325,23 +327,5 @@ cogn <- cogn %>%
   select(src_subject_id, 
          nihtbx_totalcomp_fc #NIH toolbox - cognition total
          ) 
-```
-
-## Parental Education Level 
-
-```{r}
-
-```
-
-# Family History of Mental Illness 
-
-```{r}
-
-```
-
-# SES 
-
-```{r}
-
 ```
 

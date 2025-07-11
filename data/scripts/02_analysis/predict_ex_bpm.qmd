@@ -1,5 +1,5 @@
 ---
-title: "Predict four symptom domains"
+title: "Predict Externalizing Symptoms for Children"
 author: "MochiBear.Hei"
 date: "04.13.2025"
 format:
@@ -65,6 +65,8 @@ library(viridis)  # For consistent color palette
 
 ```
 
+Predicts externalizing symptoms using XGBoost with MRI, demographics, and SES features. Includes stratified splitting, mean imputation, hyperparameter tuning, and visualizations of model performance and tuning results.
+
 # Load
 ## ID list
 ```{r}
@@ -83,27 +85,27 @@ mri <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/mri
 full_dat <- inner_join(subids, mri, by = "src_subject_id")
 ```
 
-## CBCL
+## bpm
 ```{r}
-cbcl <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_p_cbcl.csv") %>%
+bpm <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_y_bpm.csv") %>%
   filter(eventname == "2_year_follow_up_y_arm_1") %>%
-  select(src_subject_id,cbcl_scr_syn_external_t) %>%
+  select(src_subject_id, bpm_y_scr_external_t) %>%
   distinct(src_subject_id, .keep_all = TRUE) %>%
   mutate(
     # bin the raw t scores by clinical cutoffs
-    cbcl_externalizing = cut(
-      cbcl_scr_syn_external_t,
+    bpm_externalizing = cut(
+      bpm_y_scr_external_t,
       breaks = c(-Inf, 65, 70, Inf),
       labels = c("normal", "borderline", "clinical"),
       right = FALSE
     ),
     # convert the factors to numeric class labels: normal = 0, borderline = 1, clinical = 2
-    cbcl_externalizing = as.numeric(cbcl_externalizing) - 1
+    bpm_externalizing = as.numeric(bpm_externalizing) - 1
   ) %>%
-  select(src_subject_id, cbcl_externalizing)
+  select(src_subject_id, bpm_externalizing)
 
 # merge
-full_dat <- inner_join(full_dat, cbcl, by = "src_subject_id")
+full_dat <- inner_join(full_dat, bpm, by = "src_subject_id")
 ```
 
 # Handle NA
@@ -114,9 +116,12 @@ na_counts[na_counts > 0]  # print only columns with NA values
 
 # mean imputation: 
 full_dat <- full_dat %>%
-  mutate(across(c(mrisdp_508, mrisdp_527, mrisdp_567, mrisdp_582, mrisdp_601, mrisdp_602, mrisdp_603, mrisdp_604),
+  mutate(across(c(mrisdp_508, mrisdp_527, mrisdp_582, mrisdp_601, mrisdp_602, mrisdp_603, mrisdp_604),
                 ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
 
+# Remove rows with missing bpm_externalizing
+full_dat <- full_dat %>%
+  filter(!is.na(bpm_externalizing))
 ```
 
 # Split data
@@ -125,29 +130,29 @@ library(caret)
 
 set.seed(123)
 
-# Create stratified split indices for cbcl_externalizing
-train_index <- createDataPartition(full_dat$cbcl_externalizing, p = 0.7, list = FALSE)
+# Create stratified split indices for bpm_externalizing
+train_index <- createDataPartition(full_dat$bpm_externalizing, p = 0.7, list = FALSE)
 train_data <- full_dat[train_index, ]
 remaining_data <- full_dat[-train_index, ]
 
 # Now split the remaining 30% (test + calib) equally (15/15) with stratification again
-test_index <- createDataPartition(remaining_data$cbcl_externalizing, p = 0.5, list = FALSE)
+test_index <- createDataPartition(remaining_data$bpm_externalizing, p = 0.5, list = FALSE)
 calib_data <- remaining_data[-test_index, ]
 test_data <- remaining_data[test_index, ]
 
 ################# check
 
 cat("Full dataset:\n")
-print(table(full_dat$cbcl_externalizing))
+print(table(full_dat$bpm_externalizing))
 
 cat("\nTraining set:\n")
-print(table(train_data$cbcl_externalizing))
+print(table(train_data$bpm_externalizing))
 
 cat("\nCalibration set:\n")
-print(table(calib_data$cbcl_externalizing))
+print(table(calib_data$bpm_externalizing))
 
 cat("\nTest set:\n")
-print(table(test_data$cbcl_externalizing))
+print(table(test_data$bpm_externalizing))
 
 ```
 
@@ -157,18 +162,18 @@ target preperation
 cols_to_remove <- c("src_subject_id", "ksads_11_917_p")
 
 #model matrices directly from split data
-x_train <- model.matrix(cbcl_externalizing ~ ., train_data %>% select(-all_of(cols_to_remove)))[, -1]
-x_calib <- model.matrix(cbcl_externalizing ~ ., calib_data %>% select(-all_of(cols_to_remove)))[, -1]
-x_test  <- model.matrix(cbcl_externalizing ~ ., test_data  %>% select(-all_of(cols_to_remove)))[, -1]
+x_train <- model.matrix(bpm_externalizing ~ ., train_data %>% select(-all_of(cols_to_remove)))[, -1]
+x_calib <- model.matrix(bpm_externalizing ~ ., calib_data %>% select(-all_of(cols_to_remove)))[, -1]
+x_test  <- model.matrix(bpm_externalizing ~ ., test_data  %>% select(-all_of(cols_to_remove)))[, -1]
 
 
 #target variables
-y_train <- train_data$cbcl_externalizing
-y_calib <- calib_data$cbcl_externalizing
-y_test  <- test_data$cbcl_externalizing
+y_train <- train_data$bpm_externalizing
+y_calib <- calib_data$bpm_externalizing
+y_test  <- test_data$bpm_externalizing
 
 #set labels for models = 0, 1, 2, 
-class_labels <- sort(unique(train_data$cbcl_externalizing))
+class_labels <- sort(unique(train_data$bpm_externalizing))
 ```
 
 # Model Training
@@ -300,16 +305,16 @@ cat("✅ Best Number of Rounds:", best_nrounds, "\n")
 
 
 # Save results to CSV
-write.csv(results_df, "cbcl_external_hyperparameter_tuning_results.csv", row.names = FALSE)
+write.csv(results_df, "bpm_external_hyperparameter_tuning_results.csv", row.names = FALSE)
 ```
 
 # Tuned Model
 
 Make predictions
 ```{r}
-#results_df <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd//outputs/models/multiclass_cbcl_bpm/cbcl_external_hyperparameter_tuning_results.csv")
+#results_df <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd//outputs/models/multiclass_cbcl_bpm/bpm_external_hyperparameter_tuning_results.csv")
 
-#load("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_cbcl_i_model+preds.RData")
+#load("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_bpm_i_model+preds.RData")
 #xgboost test matrix 
 dcalib <- xgb.DMatrix(data = x_calib, label = y_calib)
 
@@ -329,15 +334,14 @@ colnames(pred_probs) <- class_labels
 pred_classes_argmax <- max.col(pred_probs) - 1  # match class labels 0,1,2
 ```
 
-
 #save the predictions 
 ```{r}
 #save model
-xgb.save(final_model,  fname = "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_cbcl_e_model.model")
+xgb.save(final_model,  fname = "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_bpm_e_model.model")
 
 #save everything together
 save(final_model, x_test, y_test, x_calib, y_calib, pred_probs, pred_classes_argmax, train_data, test_data, calib_data, dcalib,
-     file = "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_cbcl_e_model+preds.RData")
+     file = "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_bpm_e_model+preds.RData")
 ```
 
 
@@ -443,6 +447,6 @@ p2 <- ggplot(results_df, aes(x = Trial, y = mlogloss)) +
 
 p2
 
-#ggsave("optimization_history_cbcl_i.png", plot = p2, width = 10, height = 6, dpi = 300)
+#ggsave("optimization_history_bpm_i.png", plot = p2, width = 10, height = 6, dpi = 300)
 
 ```

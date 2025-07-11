@@ -70,6 +70,8 @@ library(knitr)
 
 ```
 
+Test XGBoost classifier to predict OCD diagnosis (KSADS) using MRI features. Applies ROSE sampling for class imbalance, performs hyperparameter tuning with cross-validation, and evaluates model performance using AUC.
+
 # Load
 ## ID list
 ```{r}
@@ -235,55 +237,5 @@ ggplot(subids, aes(x = ksads_11_917_p)) +
        x = "KSADS 11_917_P (0 = No OCD, 1 = Current Diagnosis)", 
        y = "Count") +
   theme_minimal()
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
 
 ```

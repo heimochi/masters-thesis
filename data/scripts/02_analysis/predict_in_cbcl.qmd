@@ -1,5 +1,5 @@
 ---
-title: "Predict four symptom domains"
+title: "PPredict Internalizing Symptoms for Parent-Report"
 author: "MochiBear.Hei"
 date: "04.13.2025"
 format:
@@ -60,15 +60,12 @@ library(xgboost)   # main model used
 
 # Utilities
 library(knitr)     # for reporting chunks
-
 library(ggplot2)
-library(viridis) 
-
-library(plotly)
-library(htmlwidgets)
-
+library(viridis)  # For consistent color palette
 
 ```
+
+Predicts internalizing symptoms (CBCL) using XGBoost with MRI data. Includes stratified data splits, mean imputation, optional class weights, hyperparameter tuning, and performance visualizations.
 
 # Load
 ## ID list
@@ -88,29 +85,28 @@ mri <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/mri
 full_dat <- inner_join(subids, mri, by = "src_subject_id")
 ```
 
-## BPM
+## CBCL
 ```{r}
-bpm <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_y_bpm.csv") %>%
+cbcl <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/core/mental-health/mh_p_cbcl.csv") %>%
   filter(eventname == "2_year_follow_up_y_arm_1") %>%
-  select(src_subject_id, bpm_y_scr_internal_t) %>%
+  select(src_subject_id,cbcl_scr_syn_internal_t) %>%
   distinct(src_subject_id, .keep_all = TRUE) %>%
   mutate(
     # bin the raw t scores by clinical cutoffs
-    bpm_internalizing = cut(
-      bpm_y_scr_internal_t,
+    cbcl_internalizing = cut(
+      cbcl_scr_syn_internal_t,
       breaks = c(-Inf, 65, 70, Inf),
       labels = c("normal", "borderline", "clinical"),
       right = FALSE
     ),
     # convert the factors to numeric class labels: normal = 0, borderline = 1, clinical = 2
-    bpm_internalizing = as.numeric(bpm_internalizing) - 1
+    cbcl_internalizing = as.numeric(cbcl_internalizing) - 1
   ) %>%
-  select(src_subject_id, bpm_internalizing)
+  select(src_subject_id, cbcl_internalizing)
 
 # merge
-full_dat <- inner_join(full_dat, bpm, by = "src_subject_id")
+full_dat <- inner_join(full_dat, cbcl, by = "src_subject_id")
 ```
-
 
 # Handle NA
 ```{r}
@@ -127,31 +123,33 @@ full_dat <- full_dat %>%
 
 # Split data
 ```{r}
+library(caret)
+
 set.seed(123)
 
-# Create stratified split indices for bpm_internalizing
-train_index <- createDataPartition(full_dat$bpm_internalizing, p = 0.7, list = FALSE)
+# Create stratified split indices for cbcl_internalizing
+train_index <- createDataPartition(full_dat$cbcl_internalizing, p = 0.7, list = FALSE)
 train_data <- full_dat[train_index, ]
 remaining_data <- full_dat[-train_index, ]
 
 # Now split the remaining 30% (test + calib) equally (15/15) with stratification again
-test_index <- createDataPartition(remaining_data$bpm_internalizing, p = 0.5, list = FALSE)
+test_index <- createDataPartition(remaining_data$cbcl_internalizing, p = 0.5, list = FALSE)
 calib_data <- remaining_data[-test_index, ]
 test_data <- remaining_data[test_index, ]
 
 ################# check
 
 cat("Full dataset:\n")
-print(table(full_dat$bpm_internalizing))
+print(table(full_dat$cbcl_internalizing))
 
 cat("\nTraining set:\n")
-print(table(train_data$bpm_internalizing))
+print(table(train_data$cbcl_internalizing))
 
 cat("\nCalibration set:\n")
-print(table(calib_data$bpm_internalizing))
+print(table(calib_data$cbcl_internalizing))
 
 cat("\nTest set:\n")
-print(table(test_data$bpm_internalizing))
+print(table(test_data$cbcl_internalizing))
 
 ```
 
@@ -161,41 +159,38 @@ target preperation
 cols_to_remove <- c("src_subject_id", "ksads_11_917_p")
 
 #model matrices directly from split data
-x_train <- model.matrix(bpm_internalizing ~ ., train_data %>% select(-all_of(cols_to_remove)))[, -1]
-x_calib <- model.matrix(bpm_internalizing ~ ., calib_data %>% select(-all_of(cols_to_remove)))[, -1]
-x_test  <- model.matrix(bpm_internalizing ~ ., test_data  %>% select(-all_of(cols_to_remove)))[, -1]
+x_train <- model.matrix(cbcl_internalizing ~ ., train_data %>% select(-all_of(cols_to_remove)))[, -1]
+x_calib <- model.matrix(cbcl_internalizing ~ ., calib_data %>% select(-all_of(cols_to_remove)))[, -1]
+x_test  <- model.matrix(cbcl_internalizing ~ ., test_data  %>% select(-all_of(cols_to_remove)))[, -1]
 
 
 #target variables
-y_train <- train_data$bpm_internalizing
-y_calib <- calib_data$bpm_internalizing
-y_test  <- test_data$bpm_internalizing
+y_train <- train_data$cbcl_internalizing
+y_calib <- calib_data$cbcl_internalizing
+y_test  <- test_data$cbcl_internalizing
 
 #set labels for models = 0, 1, 2, 
-class_labels <- sort(unique(train_data$bpm_internalizing))
+class_labels <- sort(unique(train_data$cbcl_internalizing))
 ```
 
 # Model Training
 class weghts 
 ```{r}
 #calculate
-class_counts <- table(y_train)
-class_weights <- sum(class_counts) / (length(class_counts) * class_counts)
-train_weights <- class_weights[as.character(y_train)]
+#class_counts <- table(y_train)
+#class_weights <- sum(class_counts) / (length(class_counts) * class_counts)
+#train_weights <- class_weights[as.character(y_train)]
 
 #xgboost training set matrix with weights 
-dtrain <- xgb.DMatrix(data = x_train, label = y_train, weight = train_weights)
+#dtrain <- xgb.DMatrix(data = x_train, label = y_train, weight = train_weights)
 
-
-# no CLass weights 
-#dtrain <- xgb.DMatrix(data = x_train, label = y_train)
+dtrain <- xgb.DMatrix(data = x_train, label = y_train)
 ```
 
-# Default parameters 
+# Default parametersW or Wout weights
 ```{r}
 dtest <- xgb.DMatrix(data = x_test, label = y_test)
 
-# no tuning
 default_params <- list(
   booster = "gbtree",
   objective = "multi:softprob",
@@ -304,15 +299,16 @@ cat("✅ Best Number of Rounds:", best_nrounds, "\n")
 
 
 # Save results to CSV
-write.csv(results_df, "bpm_internal_hyperparameter_tuning_results.csv", row.names = FALSE)
-
+#write.csv(results_df, "cbcl_internal_hyperparameter_tuning_results.csv", row.names = FALSE)
 ```
 
-#Tuned Model
+# Tuned Model
 
 Make predictions
 ```{r}
-#results_df <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd//outputs/models/multiclass_cbcl_bpm/bpm_internal_hyperparameter_tuning_results.csv")
+#results_df <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd//outputs/models/multiclass_cbcl_bpm/cbcl_internal_hyperparameter_tuning_results.csv")
+
+#load("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_cbcl_i_model+preds.RData")
 #xgboost test matrix 
 dcalib <- xgb.DMatrix(data = x_calib, label = y_calib)
 
@@ -325,44 +321,37 @@ final_model <- xgb.train(
   verbose = 1
 )
 
-# ---- Predict probabilities on calibration set ----
+# predict on calibration set 
 pred_probs <- predict(final_model, dcalib, reshape = TRUE, outputmargin = FALSE)
 colnames(pred_probs) <- class_labels
-
-
-# Get argmax predictions (standard way) thresholds = 0.5
+#argmax
 pred_classes_argmax <- max.col(pred_probs) - 1  # match class labels 0,1,2
 ```
 
-# Save predictions 
+
+#save the predictions 
 ```{r}
 #save model
-xgb.save(final_model, 
-         fname = "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_bpm_i_model.model")
+xgb.save(final_model,  fname = "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_cbcl_i_model.model")
 
 #save everything together
 save(final_model, x_test, y_test, x_calib, y_calib, pred_probs, pred_classes_argmax, train_data, test_data, calib_data, dcalib,
-     file = "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_bpm_i_model+preds.RData")
+     file = "/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/outputs/models/multiclass_cbcl_bpm/m_cbcl_i_model+preds.RData")
 ```
 
 
-# Plor hyper parameters 
+# Plot hyperparameters
 ```{r}
-
-# Create the plot
 p <- plot_ly(
   type = 'parcoords',
   line = list(
     color = results_df$mlogloss,
-    colorscale = list(
-      list(0, 'red'),
-      list(0.5, 'pink'),
-      list(1, 'purple')
-    ),
+    colorscale = 'Viridis',
+    showscale = TRUE,
+    colorbar = list(title = "Log Loss"),
     cmin = 1.0900,
     cmax = 1.1088,
-    showscale = TRUE,
-    colorbar = list(title = "Log Loss")
+    opacity = 1
   ),
   dimensions = list(
     list(label = "Log Loss", 
@@ -405,28 +394,37 @@ p <- plot_ly(
     )
   )
 
-# Save the plot as an interactive HTML
-htmlwidgets::saveWidget(p, "parallel_coords_plot.html", selfcontained = TRUE)
 
-# Display plot
+#save
+htmlwidgets::saveWidget(p, "parallel_coords_plot.html", selfcontained = TRUE)
 p
+
 ```
 
-#Plot history of tuning parameters 
+# Plot hyperparameter history
 ```{r}
 results_df$Trial <- seq_len(nrow(results_df))
 results_df$best_so_far <- cummin(results_df$mlogloss)
 
-custom_colors <- c("red", "pink", "purple")
-
 p2 <- ggplot(results_df, aes(x = Trial, y = mlogloss)) +
   geom_point(aes(color = mlogloss), size = 2, alpha = 0.8) +
-  geom_line(aes(y = best_so_far), color = "red", size = 1) +
-  scale_color_gradientn(
-    colors = custom_colors,
-    name = "Log Loss",
-    limits = c(1.0900, 1.1088)  # match scale with parcoords
+  geom_line(aes(y = best_so_far, linetype = "Best Model"), color = "red", size = 1, show.legend = TRUE) +
+  geom_point(aes(shape = "Trial Log Loss"), x = Inf, y = Inf, show.legend = TRUE) +
+  scale_color_viridis(option = "viridis", name = "Log Loss", direction = -1) +
+  scale_shape_manual(name = "", values = c("Trial Log Loss" = 16)) +
+  scale_linetype_manual(name = "", values = c("Best Model" = "solid")) +
+  guides(
+    color = guide_colorbar(order = 1),
+    shape = guide_legend(
+      override.aes = list(color = "black", size = 3), 
+      order = 2
+    ),
+    linetype = guide_legend(
+      override.aes = list(color = "red", size = 1),
+      order = 3
+    )
   ) +
+
   scale_x_continuous(
     limits = c(1, max(results_df$Trial)),
     breaks = pretty(results_df$Trial)
@@ -444,32 +442,6 @@ p2 <- ggplot(results_df, aes(x = Trial, y = mlogloss)) +
 
 p2
 
-ggsave("optimization_history_bpm_i.png", plot = p2, width = 10, height = 6, dpi = 300)
+#ggsave("optimization_history_cbcl_i.png", plot = p2, width = 10, height = 6, dpi = 300)
 
 ```
-
-
-```{r}
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-
-```{r}
-
-
-```
-

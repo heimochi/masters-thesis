@@ -1,5 +1,5 @@
 ---
-title: "Plot four symptom domains"
+title: "Plot Internalizing Symptoms for Parent-Report"
 author: "MochiBear.Hei"
 date: "04.16.2025"
 format:
@@ -62,6 +62,8 @@ library(Metrics)
 library(patchwork) 
 theme_set(theme_classic(base_size = 14))
 ```
+
+Evaluates the XGBoost model predicting CBCL internalizing symptoms. Includes argmax and threshold-calibrated accuracy, ROC and histogram plots per class, confusion matrix heatmap, calibration via Youden's J, and a permutation test for significance.
 
 # load model
 ```{r}
@@ -383,47 +385,3 @@ print(perm_plot)
 
 ggsave("permutation_test.png", plot = perm_plot, width = 7, height = 5, dpi = 300)
 ```
-
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-```{r}
-
-```
-
-
-```{r}
-
-
-```
-
-
-```{r}
-
-
-```
-
-
-
-```{r}
-
-
-```
-
-
-

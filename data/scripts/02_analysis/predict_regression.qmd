@@ -66,6 +66,8 @@ library(ggplot2)
 library(knitr)
 ```
 
+Test XGBoost regression models to predict continuous symptom scores (internalizing/externalizing) from MRI and demographics. Covers data preprocessing, cross-validation, hyperparameter tuning (depth, regularization), and evaluation for CBCL and BPM outcomes.
+
 # load
 ```{r}
 subids <- read.csv("/Users/maggieheimvik/Desktop/GitHub/masters_thesis/Data/ocd/src_subject_id.csv")
@@ -952,62 +954,4 @@ ggplot(eval_log_long, aes(x = iter, y = value, color = variable)) +
   scale_color_manual(values = c("train_rmse" = "blue", "test_rmse" = "red"))
 
 ```
-
-
-```{r}
-
-```
-
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-
 
