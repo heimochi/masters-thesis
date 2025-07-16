@@ -2,15 +2,13 @@ This repository contains the analysis and modeling scripts for my Master’s the
 
 The project investigates brain-behavior relationships using neuroimaging and behavioral data from the ABCD Study.
 
-
-Data Source
+# Data Source
 
 Data used in this thesis is sourced from the ABCD Data Release 5.1 (Haist & Jernigan, 2023).
 
 Note: Access to raw data requires proper credentials through the NIMH Data Archive (NDA).
 
-
-Goals
+# Goals
 
 Preprocess behavioral and MRI data for a subset of youth with OCD and healthy controls
 
@@ -20,8 +18,7 @@ Compare parent and youth reported symptom profiles (CBCL, BPM)
 
 Calibrate predictions and assess generalization to unseen data
 
-
-Summary Methods
+# Summary Methods
 
 Data manipulation: dplyr, tidyr
 
@@ -33,8 +30,7 @@ Tables: knitr, gt
 
 Reporting: Quarto (.qmd) notebooks
 
-
-Disclaimer
+# Disclaimer
 
 This was my first full coding project, and the code reflects a learning process.
 
