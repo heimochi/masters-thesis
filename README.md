@@ -2,39 +2,52 @@ This repository contains the analysis and modeling scripts for my Master’s the
 
 The project investigates brain-behavior relationships using neuroimaging and behavioral data from the ABCD Study.
 
+# XGBoosting the Signal: A Machine Learning Approach for Informant-Sensitive Predictions of OCD Symptoms in Children Based on Brain Morphology
 
-Data Source
+**Author:** Margrete Soya Heimvik  
+**Supervisors:** Øystein Sørensen, Ina Drabløs  
+**Institution:** Centre for Lifespan Changes in Brain and Cognition (LCBC), University of Oslo  
 
 Data used in this thesis is sourced from the ABCD Data Release 5.1 (Haist & Jernigan, 2023).
 
 Note: Access to raw data requires proper credentials through the NIMH Data Archive (NDA).
 
+## Project Overview
 
-Goals
+This thesis explores whether machine learning applied to structural brain imaging can predict obsessive-compulsive symptoms in children, and how predictions vary depending on the reporting informant (child vs. parent). Using data from the **Adolescent Brain Cognitive Development (ABCD) study**, XGBoost classifiers were trained to predict internalizing symptom severity from parcellated brain volume features.
 
-Preprocess behavioral and MRI data for a subset of youth with OCD and healthy controls
+---
 
-Train and evaluate machine learning models (XGBoost) to predict clinical symptoms
+## Research Questions
 
-Compare parent and youth reported symptom profiles (CBCL, BPM)
+1. Can structural MRI features predict the severity of OCD-related internalizing symptoms in children?
+2. Does predictive accuracy differ between child- and parent-reported symptoms?
 
-Calibrate predictions and assess generalization to unseen data
+---
+
+## Methods
+
+- **Dataset:** ABCD study (via LCBC collaboration)  
+- **Input:** Parcellated sMRI brain volume features  
+- **Targets:**  
+  - Parent-reported: Child Behavior Checklist (CBCL)  
+  - Child-reported: Brief Problem Monitor (BPM)  
+- **Model:** XGBoost (with matched preprocessing, class balancing, and tuning)  
+- **Evaluation:** ROC, precision, recall, permutation testing
+
+## Key Findings
+
+- Models achieved high accuracy, but performance was largely due to class imbalance.
+- Neither child- nor parent-report models significantly outperformed chance.
+- Slight advantage in ROC for child-report model did not translate into better classification.
+- Structural brain features alone were not predictive of OCD-related symptoms.
 
 
-Summary Methods
+## Conclusion
 
-Data manipulation: dplyr, tidyr
+The study suggests that sMRI-derived structural features have limited value in predicting internalizing OCD symptoms in children. Results highlight the challenges of low symptom prevalence, informant discrepancies, and the need for multimodal approaches in pediatric neuropsychiatric research.
 
-Modeling: xgboost, caret, ROSE, MLmetrics, Metrics,pROC
-
-Visualization: ggplot2, viridis, plotly, htmlwidgets, patchwork, GGally, ggcorrplot
-
-Tables: knitr, gt 
-
-Reporting: Quarto (.qmd) notebooks
-
-
-Disclaimer
+## Disclaimer
 
 This was my first full coding project, and the code reflects a learning process.
 
