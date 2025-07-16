@@ -1,6 +1,4 @@
-This repository contains the analysis and modeling scripts for my Master’s thesis.
-
-The project investigates brain-behavior relationships using neuroimaging and behavioral data from the ABCD Study.
+This repository contains the analysis and modeling scripts for my Master’s thesis investigating brain-behavior relationships using neuroimaging and behavioral data.
 
 # XGBoosting the Signal: A Machine Learning Approach for Informant-Sensitive Predictions of OCD Symptoms in Children Based on Brain Morphology
 
@@ -8,13 +6,13 @@ The project investigates brain-behavior relationships using neuroimaging and beh
 **Supervisors:** Øystein Sørensen, Ina Drabløs  
 **Institution:** Centre for Lifespan Changes in Brain and Cognition (LCBC), University of Oslo  
 
-Data used in this thesis is sourced from the ABCD Data Release 5.1 (Haist & Jernigan, 2023).
+Data used in this thesis is sourced from the **Adolescent Brain Cognitive Development (ABCD) study**, Data Release 5.1 (Haist & Jernigan, 2023).
 
 Note: Access to raw data requires proper credentials through the NIMH Data Archive (NDA).
 
 ## Project Overview
 
-This thesis explores whether machine learning applied to structural brain imaging can predict obsessive-compulsive symptoms in children, and how predictions vary depending on the reporting informant (child vs. parent). Using data from the **Adolescent Brain Cognitive Development (ABCD) study**, XGBoost classifiers were trained to predict internalizing symptom severity from parcellated brain volume features.
+This thesis explores whether machine learning applied to structural brain imaging can predict obsessive-compulsive symptoms in children, and how predictions vary depending on the reporting informant (child vs. parent). Using data from the ABCD study, XGBoost classifiers were trained to predict internalizing symptom severity from parcellated brain volume features.
 
 ---
 
